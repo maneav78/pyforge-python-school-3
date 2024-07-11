@@ -12,10 +12,10 @@ In this introduction, we will explore the basic functionalities of RDKit, focusi
 
 ### 1. Installation of RDKit
 
-To install [RDKit](https://www.rdkit.org/docs/Install.html), you can use the following commands in your terminal. It's recommended to use a conda environment to manage dependencies easily:
+To install [RDKit](https://www.rdkit.org/docs/Install.html), you can use the following commands in your terminal. It's recommended to use a [conda](https://docs.anaconda.com/miniconda/) environment to manage dependencies easily:
 
 ```sh
-conda create -c conda-forge -n my-rdkit-env rdkit
+conda create -c conda-forge -n my-rdkit-env rdkit=2024.03.4 python=3.12
 conda activate my-rdkit-env
 ```
 
@@ -72,9 +72,10 @@ Now you have everything to implement the substructure search function:
 
 <img title="a title" alt="Alt text" src="../../images/1.png">
 
-Implement a function in file /src/main.py that takes two arguments:
-1. Set of molecules
-2. A molecule by which we will filter molecules from the set based on the property of inclusion of one molecule in another
+Implement a function in file `/src/main.py` that takes two arguments:
+1. List of molecules as SMILES strings
+2. Substructure as SMILES string
+Function should return a list of all molecules from argument 1 that contain substructure from argument 2
 
 ```python
 substructure_search(["CCO", "c1ccccc1", "CC(=O)O", "CC(=O)Oc1ccccc1C(=O)O"], "c1ccccc1")
