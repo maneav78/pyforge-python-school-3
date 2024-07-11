@@ -1,4 +1,4 @@
-# Homework
+# How to submit homework
 ## Forking
 Go to quantori's repository and fork it, creating a copy of repository in your own account.
 ![Forking 1](/images/submit_hw/forking.png)
