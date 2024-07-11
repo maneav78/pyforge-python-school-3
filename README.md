@@ -51,6 +51,11 @@ These examples illustrate how substructure searches can be used to find compound
 
 ## Homework
 
+Every week we will add tasks to the folder **hw**. 
+Delivery details are available in the **README.md** in the **hw**
+
+## Roadmap
+
 As part of our homeworks, we will try to build a web service for storing and substructural search of chemical compounds
 
 - Use the **RDKit** library to implement substructure search
@@ -87,6 +92,3 @@ As part of our homeworks, we will try to build a web service for storing and sub
 
 - **Celery** to speed up queries
 <img title="a title" alt="Alt text" src="./images/9.png">
-
-Every week we will add tasks to the folder **hw**. 
-Delivery details are available in the **README.md** in the **hw**
