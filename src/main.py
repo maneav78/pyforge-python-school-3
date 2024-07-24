@@ -13,8 +13,7 @@ def substructure_search(mols, mol):
     for molecule in mols:
         object_mol = Chem.MolFromSmiles(molecule)
         if object_mol is None:
-            print(f'Skipping invalid molecule SMILES: {molecule}')
-            continue
+            raise ValueError(f'Invalid Molecule!')
 
         if object_mol.GetNumAtoms() < substructure_num_atoms:
             continue 
@@ -26,4 +25,8 @@ def substructure_search(mols, mol):
 
 # testing
 if name == "main":
-    print(substructure_search(["CCO", "c1ccccc1", "CC(=O)O", "CC(=O)Oc1ccccc1C(=O)O"], "c1ccccc1"))
+    assert substructure_search(["CCO", "c1ccccc1", "CC(=O)O", "CC(=O)Oc1ccccc1C(=O)O"], "c1ccccc1") == ["c1ccccc1", "CC(=O)Oc1ccccc1C(=O)O"]
+    
+    assert substructure_search(["CCO", "c1ccccc1", "CC(=O)O", "CC(=O)Oc1ccccc1C(=O)O"], "invalid_smiles") == []
+    
+    print("All tests passed!")
