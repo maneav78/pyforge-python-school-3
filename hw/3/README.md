@@ -9,7 +9,7 @@ Try to use the best practices that were discussed during the lesson.
 It is necessary to implement Dockerfile and docker compose for your Python FastAPI application with installed rdkit.
 Use this to install rdkit:
 
-```commandline
+```dockerfile
 FROM continuumio/miniconda3
 RUN conda install conda-forge::rdkit
 ```
@@ -22,6 +22,13 @@ Reviewers is [Kirill Saltanov](https://github.com/Saltanofff)
 This part will give you extra points for completing it. We will use nginx for load balancing.
 
 <img title="a title" alt="Alt text" src="../../images/nginx.png">
+
+- Add method to check balancing:
+```python
+@app.get("/")
+def get_server():
+    return {"server_id": getenv("SERVER_ID", "1")}
+```
 
 - Configuration file for nginx **nginx/default.conf**:
 
@@ -41,20 +48,23 @@ server {
 ```
 
 - Define services, networks, and volumes in `docker-compose.yml`.
-```commandline
+```dockerfile
 version: '3.8'
 services:
   web1:
     build: ./src
     volumes:
       - ./src:/src
-
+    environment:
+      SERVER_ID: SERVER-1
 
   web2:
     build: ./src
     volumes:
       - ./src:/src
-
+    environment:
+      SERVER_ID: SERVER-2
+      
   nginx:
     image: nginx:latest
     ports:
@@ -74,4 +84,10 @@ services:
 
 `docker-compose ps`
 
-- You should be able to access the application on your browser. 
+- You should be able to access the application on your browser.
+
+<img title="a title" alt="Alt text" src="../../images/server1.png">
+
+- Refresh to confirm that the load balancer distributes the request to both web containers.
+
+<img title="a title" alt="Alt text" src="../../images/server2.png">
