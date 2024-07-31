@@ -2,9 +2,8 @@ from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Query
 from rdkit import Chem
 import sqlite3
 from sqlite3 import Error
-from fpdf import FPDF
-from PIL import Image
-import os
+from os import getenv
+
 
 app = FastAPI()
 
@@ -70,6 +69,9 @@ def create_table():
 def startup_event():
     create_table()
 
+@app.get("/")
+def get_server():
+    return {"server_id": getenv("SERVER_ID", "1")}
 
 @app.post("/add")
 def add_molecule(id: int, smiles: str, connection=Depends(get_connection)):
