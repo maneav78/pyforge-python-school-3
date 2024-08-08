@@ -1,36 +1,27 @@
-from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Query
+from fastapi import FastAPI, Depends, HTTPException
 from rdkit import Chem
 import sqlite3
 from sqlite3 import Error
 from os import getenv
 
-
 app = FastAPI()
 
 db = "molecules.db"
-# DEFAULT_FILENAME = "uploaded_image.pdf"
-
 
 def substructure_search(mols, mol):
     substructure = Chem.MolFromSmiles(mol)
-
     if substructure is None:
         raise ValueError(f'Invalid substructure SMILES: {mol}')
-
     substructure_num_atoms = substructure.GetNumAtoms()
-
     matches = []
     for molecule in mols:
         object_mol = Chem.MolFromSmiles(molecule)
         if object_mol is None:
             raise ValueError(f'Invalid Molecule!')
-
         if object_mol.GetNumAtoms() < substructure_num_atoms:
             continue
-
         if object_mol.HasSubstructMatch(substructure):
             matches.append(molecule)
-
     return matches
 
 
@@ -74,7 +65,8 @@ def get_server():
     return {"server_id": getenv("SERVER_ID", "1")}
 
 @app.post("/add")
-def add_molecule(id: int, smiles: str, connection=Depends(get_connection)):
+def add_molecule(id: int, smiles: str):
+    connection = get_connection()
     sql_code = """
     INSERT INTO molecules (identifier, smiles)
     VALUES (?, ?)
@@ -85,11 +77,15 @@ def add_molecule(id: int, smiles: str, connection=Depends(get_connection)):
         connection.commit()
         return {"message": f"Molecule '{id}' added successfully."}
     except Error as e:
+        print(f"Error occurred: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
+    finally:
+        if connection:
+            connection.close()
 
 @app.get("/get")
-def get_molecule(id: int, connection=Depends(get_connection)):
+def get_molecule(id: int):
+    connection = get_connection()
     sql_code = """
     SELECT smiles FROM molecules WHERE identifier = ?
     """
@@ -102,11 +98,15 @@ def get_molecule(id: int, connection=Depends(get_connection)):
         else:
             raise HTTPException(status_code=404, detail="Molecule not found")
     except Error as e:
+        print(f"Error occurred: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
+    finally:
+        if connection:
+            connection.close()
 
 @app.put("/update")
-def update_molecule(id: int, smiles: str, connection=Depends(get_connection)):
+def update_molecule(id: int, smiles: str):
+    connection = get_connection()
     sql_code = """
     UPDATE molecules SET smiles = ? WHERE identifier = ?
     """
@@ -116,11 +116,15 @@ def update_molecule(id: int, smiles: str, connection=Depends(get_connection)):
         connection.commit()
         return {"message": f"Molecule '{id}' updated successfully."}
     except Error as e:
+        print(f"Error occurred: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
+    finally:
+        if connection:
+            connection.close()
 
 @app.delete("/del")
-def delete_molecule(id: int, connection=Depends(get_connection)):
+def delete_molecule(id: int):
+    connection = get_connection()
     sql_code = """
     DELETE FROM molecules WHERE identifier = ?
     """
@@ -130,11 +134,15 @@ def delete_molecule(id: int, connection=Depends(get_connection)):
         connection.commit()
         return {"message": f"Molecule '{id}' deleted successfully."}
     except Error as e:
+        print(f"Error occurred: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
+    finally:
+        if connection:
+            connection.close()
 
 @app.get("/getall")
-def list_all_molecules(connection=Depends(get_connection)):
+def list_all_molecules():
+    connection = get_connection()
     sql_code = """
     SELECT identifier, smiles FROM molecules
     """
@@ -144,11 +152,15 @@ def list_all_molecules(connection=Depends(get_connection)):
         rows = c.fetchall()
         return rows
     except Error as e:
+        print(f"Error occurred: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
+    finally:
+        if connection:
+            connection.close()
 
 @app.get("/subsearch")
-def sub_search(substructure: str, connection=Depends(get_connection)):
+def sub_search(substructure: str):
+    connection = get_connection()
     sql_code = """
     SELECT smiles FROM molecules
     """
@@ -160,20 +172,8 @@ def sub_search(substructure: str, connection=Depends(get_connection)):
         matches = substructure_search(molecules, substructure)
         return matches
     except Error as e:
+        print(f"Error occurred: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# Upload file comming soon...
-
-# Testing code
-if __name__ == "__main__":
-    # Test with valid substructure
-    assert substructure_search(["CCO", "c1ccccc1", "CC(=O)O", "CC(=O)Oc1ccccc1C(=O)O"], "c1ccccc1") == ["c1ccccc1", "CC(=O)Oc1ccccc1C(=O)O"]
-
-    # Test with invalid substructure
-    try:
-        substructure_search(["CCO", "c1ccccc1", "CC(=O)O", "CC(=O)Oc1ccccc1C(=O)O"], "invalid_smiles")
-    except ValueError as e:
-        assert str(e) == 'Invalid substructure SMILES: invalid_smiles'
-
-    print("All tests passed!")
+    finally:
+        if connection:
+            connection.close()
