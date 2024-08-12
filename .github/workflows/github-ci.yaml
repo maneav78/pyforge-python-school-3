@@ -29,9 +29,11 @@ jobs:
       - name: Checking Containers
         run: docker ps 
 
+      - name: 
+
       - name: Checking test results
-        run: docker logs pyforge-python-school-3-test-1 | grep "8 passed" || exit 1
-        
+        run: docker logs pyforge-python-school-3_test_1 | grep "8 passed" || exit 1
+
 
 
 
