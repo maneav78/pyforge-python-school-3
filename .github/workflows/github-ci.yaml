@@ -30,7 +30,8 @@ jobs:
         run: docker ps 
 
       - name: Checking test results
-        run: docker logs test-1
+        run: docker logs pyforge-python-school-3-test-1 | grep "8 passed" || exit 1
+        
 
 
 
