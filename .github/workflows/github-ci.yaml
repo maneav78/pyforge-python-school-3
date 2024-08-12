@@ -26,12 +26,12 @@ jobs:
       - name: Docker-compose
         run: docker-compose up --build -d
 
-      - name: Checking Containers
-        run: docker ps 
+      # - name: Checking Containers
+      #   run: docker ps 
 
       - name: Show logs
         run: docker logs pyforge-python-school-3_test_1
-        
+
       - name: Checking test results
         run: docker logs pyforge-python-school-3_test_1 | grep "8 passed" || exit 1
 
