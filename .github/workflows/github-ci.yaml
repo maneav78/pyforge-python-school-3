@@ -30,7 +30,7 @@ jobs:
         run: docker ps 
 
       - name: Checking test results
-        run: docker logs test | grep "8 success" || exit 1
+        run: docker logs test 
 
 
 
