@@ -9,4 +9,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["sh", "-c", "pytest testing/test.py && sleep 10"]
+CMD ["pytest", "testing/test.py"]
