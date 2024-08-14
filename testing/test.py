@@ -6,17 +6,16 @@ import os
 
 client = TestClient(app)
 
+
 @pytest.fixture(scope="module", autouse=True)
 def setup_database():
     if os.path.exists("molecules.db"):
         os.remove("molecules.db")
-    
     create_table()
-    
     yield
-    
     if os.path.exists("molecules.db"):
         os.remove("molecules.db")
+
 
 def test_substructure_search_valid():
     mols = ["CCO", "c1ccccc1", "CC(=O)O", "CC(=O)Oc1ccccc1C(=O)O"]
@@ -24,11 +23,13 @@ def test_substructure_search_valid():
     result = substructure_search(mols, substructure)
     assert result == ["c1ccccc1", "CC(=O)Oc1ccccc1C(=O)O"]
 
+
 def test_substructure_search_invalid():
     mols = ["CCO", "c1ccccc1", "CC(=O)O", "CC(=O)Oc1ccccc1C(=O)O"]
     substructure = "invalid_smiles"
     with pytest.raises(ValueError, match='Invalid substructure SMILES: invalid_smiles'):
         substructure_search(mols, substructure)
+
 
 def test_add_molecule():
     time.sleep(2)
@@ -36,12 +37,14 @@ def test_add_molecule():
     assert response.status_code == 200
     assert response.json() == {"message": "Molecule '1' added successfully."}
 
+
 def test_get_molecule():
     response = client.post("/add", params={"id": 2, "smiles": "c1ccccc1"})
     assert response.status_code == 200
     response = client.get("/get", params={"id": 2})
     assert response.status_code == 200
     assert response.json() == "c1ccccc1"
+
 
 def test_update_molecule():
     response = client.post("/add", params={"id": 3, "smiles": "CC(=O)O"})
@@ -53,6 +56,7 @@ def test_update_molecule():
     assert response.status_code == 200
     assert response.json() == "c1ccccc1"
 
+
 def test_delete_molecule():
     response = client.post("/add", params={"id": 4, "smiles": "CC(=O)Oc1ccccc1C(=O)O"})
     assert response.status_code == 200
@@ -62,6 +66,7 @@ def test_delete_molecule():
     response = client.get("/get", params={"id": 4})
     assert response.status_code == 404
 
+
 def test_list_all_molecules():
     response = client.post("/add", params={"id": 5, "smiles": "CCO"})
     assert response.status_code == 200
@@ -69,6 +74,7 @@ def test_list_all_molecules():
     assert response.status_code == 200
     response = client.get("/getall")
     assert response.status_code == 200
+
 
 def test_substructure_search_endpoint():
     response = client.post("/add", params={"id": 7, "smiles": "CCO"})
