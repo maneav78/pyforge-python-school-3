@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, HTTPException
 from rdkit import Chem
 import sqlite3
 from sqlite3 import Error
@@ -7,6 +7,7 @@ from os import getenv
 app = FastAPI()
 
 db = "molecules.db"
+
 
 def substructure_search(mols, mol):
     substructure = Chem.MolFromSmiles(mol)
@@ -17,7 +18,7 @@ def substructure_search(mols, mol):
     for molecule in mols:
         object_mol = Chem.MolFromSmiles(molecule)
         if object_mol is None:
-            raise ValueError(f'Invalid Molecule!')
+            raise ValueError("Invalid Molecule!")
         if object_mol.GetNumAtoms() < substructure_num_atoms:
             continue
         if object_mol.HasSubstructMatch(substructure):
@@ -60,9 +61,11 @@ def create_table():
 def startup_event():
     create_table()
 
+
 @app.get("/")
 def get_server():
     return {"server_id": getenv("SERVER_ID", "1")}
+
 
 @app.post("/add")
 def add_molecule(id: int, smiles: str):
@@ -82,6 +85,7 @@ def add_molecule(id: int, smiles: str):
     finally:
         if connection:
             connection.close()
+
 
 @app.get("/get")
 def get_molecule(id: int):
@@ -104,6 +108,7 @@ def get_molecule(id: int):
         if connection:
             connection.close()
 
+
 @app.put("/update")
 def update_molecule(id: int, smiles: str):
     connection = get_connection()
@@ -121,6 +126,7 @@ def update_molecule(id: int, smiles: str):
     finally:
         if connection:
             connection.close()
+
 
 @app.delete("/del")
 def delete_molecule(id: int):
@@ -140,6 +146,7 @@ def delete_molecule(id: int):
         if connection:
             connection.close()
 
+
 @app.get("/getall")
 def list_all_molecules():
     connection = get_connection()
@@ -157,6 +164,7 @@ def list_all_molecules():
     finally:
         if connection:
             connection.close()
+
 
 @app.get("/subsearch")
 def sub_search(substructure: str):
