@@ -5,6 +5,10 @@ services:
       - ./src:/src
     environment:
       SERVER_ID: SERVER-1
+      DB_URL: ${DB_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 
   web2:
@@ -13,6 +17,10 @@ services:
       - ./src:/src
     environment:
       SERVER_ID: SERVER-2
+      DB_URL: ${DB_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 
   nginx:
@@ -25,10 +33,36 @@ services:
       - web1
       - web2
 
-  test:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    depends_on:
-      - web1
-      - web2
+  # test:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   depends_on:
+  #     - web1
+  #     - web2
+
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data/pgdata
+      - ./docker-entrypoint-initdb.d/:/docker-entrypoint-initdb.d/  
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+
+volumes:
+  pgdata:
+    driver: local
