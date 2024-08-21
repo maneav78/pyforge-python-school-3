@@ -33,13 +33,13 @@ services:
       - web1
       - web2
 
-  # test:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   depends_on:
-  #     - web1
-  #     - web2
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - web1
+      - web2
 
   postgres:
     image: postgres:latest

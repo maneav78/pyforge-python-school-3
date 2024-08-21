@@ -1,86 +1,124 @@
 import pytest
-from src.main import substructure_search, app, create_table
-from fastapi.testclient import TestClient
-import time
 import os
+from databases import Database
+from httpx import AsyncClient, ASGITransport
+from src.main import app, substructure_search
 
-client = TestClient(app)
+database = Database(os.getenv("DB_URL"))
 
 
 @pytest.fixture(scope="module", autouse=True)
-def setup_database():
-    if os.path.exists("molecules.db"):
-        os.remove("molecules.db")
-    create_table()
+async def setup_database():
+    await database.connect()
+    await database.execute('''
+        CREATE TABLE IF NOT EXISTS molecules (
+            identifier INTEGER PRIMARY KEY,
+            smiles TEXT NOT NULL
+        );
+    ''')
     yield
-    if os.path.exists("molecules.db"):
-        os.remove("molecules.db")
+    await database.disconnect()
 
 
-def test_substructure_search_valid():
+async def get_client():
+    return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+
+
+@pytest.mark.asyncio
+async def test_substructure_search_valid():
     mols = ["CCO", "c1ccccc1", "CC(=O)O", "CC(=O)Oc1ccccc1C(=O)O"]
     substructure = "c1ccccc1"
-    result = substructure_search(mols, substructure)
+    result = await substructure_search(mols, substructure)
     assert result == ["c1ccccc1", "CC(=O)Oc1ccccc1C(=O)O"]
 
 
-def test_substructure_search_invalid():
+@pytest.mark.asyncio
+async def test_substructure_search_invalid():
     mols = ["CCO", "c1ccccc1", "CC(=O)O", "CC(=O)Oc1ccccc1C(=O)O"]
     substructure = "invalid_smiles"
     with pytest.raises(ValueError, match='Invalid substructure SMILES: invalid_smiles'):
-        substructure_search(mols, substructure)
+        await substructure_search(mols, substructure)
 
 
-def test_add_molecule():
-    time.sleep(2)
-    response = client.post("/add", params={"id": 1, "smiles": "CCO"})
+async def add_molecule(client, id: int, smiles: str):
+    response = await client.post("/add", params={"id": id, "smiles": smiles})
     assert response.status_code == 200
-    assert response.json() == {"message": "Molecule '1' added successfully."}
+    assert response.json() == {"message": f"Molecule '{id}' added successfully."}
 
 
-def test_get_molecule():
-    response = client.post("/add", params={"id": 2, "smiles": "c1ccccc1"})
+async def get_molecule(client, id: int, expected_smiles: str):
+    response = await client.get("/get", params={"id": id})
     assert response.status_code == 200
-    response = client.get("/get", params={"id": 2})
-    assert response.status_code == 200
-    assert response.json() == "c1ccccc1"
+    assert response.json() == expected_smiles
 
 
-def test_update_molecule():
-    response = client.post("/add", params={"id": 3, "smiles": "CC(=O)O"})
+async def update_molecule(client, id: int, smiles: str):
+    response = await client.put("/update", params={"id": id, "smiles": smiles})
     assert response.status_code == 200
-    response = client.put("/update", params={"id": 3, "smiles": "c1ccccc1"})
-    assert response.status_code == 200
-    assert response.json() == {"message": "Molecule '3' updated successfully."}
-    response = client.get("/get", params={"id": 3})
-    assert response.status_code == 200
-    assert response.json() == "c1ccccc1"
+    assert response.json() == {"message": f"Molecule '{id}' updated successfully."}
 
 
-def test_delete_molecule():
-    response = client.post("/add", params={"id": 4, "smiles": "CC(=O)Oc1ccccc1C(=O)O"})
+async def delete_molecule(client, id: int):
+    response = await client.delete("/del", params={"id": id})
     assert response.status_code == 200
-    response = client.delete("/del", params={"id": 4})
-    assert response.status_code == 200
-    assert response.json() == {"message": "Molecule '4' deleted successfully."}
-    response = client.get("/get", params={"id": 4})
-    assert response.status_code == 404
+    assert response.json() == {"message": f"Molecule '{id}' deleted successfully."}
 
 
-def test_list_all_molecules():
-    response = client.post("/add", params={"id": 5, "smiles": "CCO"})
+async def list_all_molecules(client):
+    response = await client.get("/getall")
     assert response.status_code == 200
-    response = client.post("/add", params={"id": 6, "smiles": "c1ccccc1"})
-    assert response.status_code == 200
-    response = client.get("/getall")
-    assert response.status_code == 200
+    return response.json()
 
 
-def test_substructure_search_endpoint():
-    response = client.post("/add", params={"id": 7, "smiles": "CCO"})
+async def substructure_search_endpoint(client, substructure: str):
+    response = await client.get("/subsearch", params={"substructure": substructure})
     assert response.status_code == 200
-    response = client.post("/add", params={"id": 8, "smiles": "c1ccccc1"})
-    assert response.status_code == 200
-    response = client.get("/subsearch", params={"substructure": "c1ccccc1"})
-    assert response.status_code == 200
-    assert "c1ccccc1" in response.json()
+    return response.json()
+
+
+@pytest.mark.asyncio
+async def test_add_molecule():
+    async with await get_client() as client:
+        await add_molecule(client, 1, "CCO")
+
+
+@pytest.mark.asyncio
+async def test_get_molecule():
+    async with await get_client() as client:
+        await add_molecule(client, 1, "CCO")
+        await get_molecule(client, 1, "CCO")
+
+
+@pytest.mark.asyncio
+async def test_update_molecule():
+    async with await get_client() as client:
+        await add_molecule(client, 1, "CCO")
+        await update_molecule(client, 1, "c1ccccc1")
+        await get_molecule(client, 1, "c1ccccc1")
+
+
+@pytest.mark.asyncio
+async def test_delete_molecule():
+    async with await get_client() as client:
+        await add_molecule(client, 1, "CCO")
+        await delete_molecule(client, 1)
+
+
+@pytest.mark.asyncio
+async def test_list_all_molecules():
+    async with await get_client() as client:
+        await add_molecule(client, 1, "CCO")
+        await add_molecule(client, 2, "c1ccccc1")
+        molecules = await list_all_molecules(client)
+        assert len(molecules) == 2
+
+
+@pytest.mark.asyncio
+async def test_substructure_search_endpoint():
+    async with await get_client() as client:
+        await add_molecule(client, 1, "CCO")
+        await add_molecule(client, 2, "c1ccccc1")
+        await add_molecule(client, 3, "CC(=O)O")
+        matches = await substructure_search_endpoint(client, "c1ccccc1")
+        assert "c1ccccc1" in matches
+        assert len(matches) == 1
