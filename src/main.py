@@ -1,9 +1,11 @@
 from databases import Database
 from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, inspect, select
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from contextlib import asynccontextmanager
 from rdkit import Chem
 import os
 from dotenv import load_dotenv
+from pydantic import BaseModel
 
 app = FastAPI()
 
@@ -12,10 +14,7 @@ load_dotenv(".env")
 DB_URL = os.getenv("DB_URL")
 
 if DB_URL is None:
-    raise ValueError("DATABASE_URL is not set in the environment variables")
-
-# Debug print to check if the DB_URL is correct
-print(f"DB_URL: {DB_URL}")
+    raise ValueError("DATABASE_URL is not set in the environment variables")    
 
 database = Database(DB_URL)
 metadata = MetaData()
@@ -31,6 +30,10 @@ engine = create_engine(DB_URL)
 inspector = inspect(engine)
 if not inspector.has_table('molecules'):
     metadata.create_all(engine)
+
+class Molecule(BaseModel):
+    id: int
+    smiles: str 
 
 async def substructure_search(mols, mol):
     substructure = Chem.MolFromSmiles(mol)
@@ -48,55 +51,59 @@ async def substructure_search(mols, mol):
             matches.append(molecule)
     return matches
 
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     await database.connect()
-
-@app.on_event("shutdown")
-async def shutdown():
+    yield
     await database.disconnect()
+
+app.router.lifespan_context = lifespan
+
+async def get_db() -> Database:
+    return database
 
 @app.get("/")
 async def get_server():
     return {"server_id": os.getenv("SERVER_ID", "1")}
 
 @app.post("/add")
-async def add_molecule(id: int, smiles: str):
-    query = molecules.insert().values(identifier=id, smiles=smiles)
-    await database.execute(query)
-    return {"message": f"Molecule '{id}' added successfully."}
+async def add_molecule(molecule: Molecule, db: Database = Depends(get_db)):
+    query = molecules.insert().values(identifier=molecule.id, smiles=molecule.smiles)
+    await db.execute(query)
+    return {"message": f"Molecule '{molecule.id}' added successfully."}
 
 @app.get("/get")
-async def get_molecule(id: int):
+async def get_molecule(id: int, db: Database = Depends(get_db)):
     query = select(molecules.c.smiles).where(molecules.c.identifier == id)
-    result = await database.fetch_one(query)
+    result = await db.fetch_one(query)
     if result:
         return result["smiles"]
     else:
         raise HTTPException(status_code=404, detail="Molecule not found")
 
 @app.put("/update")
-async def update_molecule(id: int, smiles: str):
-    query = molecules.update().where(molecules.c.identifier == id).values(smiles=smiles)
-    await database.execute(query)
-    return {"message": f"Molecule '{id}' updated successfully."}
+async def update_molecule(molecule: Molecule, db: Database = Depends(get_db)):
+    query = molecules.update().where(molecules.c.identifier == molecule.id).values(smiles=molecule.smiles)
+    await db.execute(query)
+    return {"message": f"Molecule '{molecule.id}' updated successfully."}
 
 @app.delete("/del")
-async def delete_molecule(id: int):
+async def delete_molecule(id: int, db: Database = Depends(get_db)):
     query = molecules.delete().where(molecules.c.identifier == id)
-    await database.execute(query)
+    await db.execute(query)
     return {"message": f"Molecule '{id}' deleted successfully."}
 
 @app.get("/getall")
-async def list_all_molecules():
+async def list_all_molecules(db: Database = Depends(get_db)):
     query = select(molecules)
-    rows = await database.fetch_all(query)
+    rows = await db.fetch_all(query)
     return rows
 
 @app.get("/subsearch")
-async def sub_search(substructure: str):
+async def sub_search(substructure: str, db: Database = Depends(get_db)):
     query = select(molecules.c.smiles)
-    rows = await database.fetch_all(query)
+    rows = await db.fetch_all(query)
     molecules_list = [row["smiles"] for row in rows]
     matches = await substructure_search(molecules_list, substructure)
     return matches
+

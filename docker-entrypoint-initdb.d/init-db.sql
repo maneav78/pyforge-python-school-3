@@ -1,1 +1,0 @@
-CREATE DATABASE molecule_db;

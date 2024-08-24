@@ -6,4 +6,5 @@ testing/.pytest_cache
 testing/molecules.db
 src/molecules.db
 .env
-
+docker.sh
+.pytest_cache
