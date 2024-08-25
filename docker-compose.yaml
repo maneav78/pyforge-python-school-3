@@ -5,7 +5,7 @@ services:
       - ./src:/src
     environment:
       SERVER_ID: SERVER-1
-      DB_URL: ${DB_URL}
+      DB_URL: ${{ secrets.DB_URL }}
     depends_on:
       postgres:
         condition: service_healthy
@@ -17,7 +17,7 @@ services:
       - ./src:/src
     environment:
       SERVER_ID: SERVER-2
-      DB_URL: ${DB_URL}
+      DB_URL: ${{ secrets.DB_URL }}
     depends_on:
       postgres:
         condition: service_healthy
@@ -37,6 +37,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    environment:
+      MAIN_DATABASE_URL: ${{ secrets.MAIN_DATABASE_URL }}
+      TEST_DB_NAME: ${{ secrets.TEST_DB_NAME }}
+      TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
     depends_on:
       - web1
       - web2
@@ -45,9 +49,9 @@ services:
     image: postgres:latest
     container_name: postgres
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${{ secrets.DB_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      POSTGRES_DB: ${{ secrets.DB_NAME }}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5433:5432"
