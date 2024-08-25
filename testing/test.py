@@ -30,6 +30,7 @@ with psycopg2.connect(MAIN_DATABASE_URL) as conn:
 test_engine = create_engine(TEST_DATABASE_URL)
 test_database = Database(TEST_DATABASE_URL)
 
+
 @pytest.fixture
 def db_connection():
     try:
@@ -38,6 +39,7 @@ def db_connection():
     finally:
         connection.close()
 
+
 def test_postgres_connection(db_connection):
     try:
         result = db_connection.execute(text("SELECT 1"))
@@ -45,7 +47,9 @@ def test_postgres_connection(db_connection):
     except OperationalError as e:
         pytest.fail(f"Database connection failed: {e}")
 
+
 client = TestClient(app)
+
 
 def override_get_db(initial_fetch_one_value=None):
     db = MagicMock()
@@ -53,19 +57,23 @@ def override_get_db(initial_fetch_one_value=None):
     db.execute = AsyncMock(return_value=None)
     return db
 
+
 def setup_db_override(initial_fetch_one_value=None):
     db = override_get_db(initial_fetch_one_value)
     app.dependency_overrides[get_db] = lambda: db
     return db
+
 
 def add_molecule(client, molecule_id, smiles):
     response = client.post("/add", json={"id": molecule_id, "smiles": smiles})
     assert response.status_code == 200
     assert response.json() == {"message": f"Molecule '{molecule_id}' added successfully."}
 
+
 def test_add_molecule():
     setup_db_override()
     add_molecule(client, 1, "CCO")
+
 
 def test_get_molecule():
     setup_db_override({"smiles": "CCO"})
@@ -73,6 +81,7 @@ def test_get_molecule():
     response = client.get("/get", params={"id": 1})
     assert response.status_code == 200
     assert response.json() == "CCO"
+
 
 def test_update_molecule():
     db = setup_db_override({"smiles": "CCO"})
@@ -85,6 +94,7 @@ def test_update_molecule():
     assert response.status_code == 200
     assert response.json() == "c1ccccc1"
 
+
 def test_delete_molecule():
     db = setup_db_override({"smiles": "CCO"})
     add_molecule(client, 4, "CCO")
@@ -96,10 +106,12 @@ def test_delete_molecule():
     assert response.status_code == 404
     assert response.json() == {"detail": "Molecule not found"}
 
+
 def mock_fetch_all_return_values(db, values):
     async def mock_fetch_all(query):
         return values
     db.fetch_all = mock_fetch_all
+
 
 def test_list_all_molecules():
     db = setup_db_override()
@@ -116,12 +128,14 @@ def test_list_all_molecules():
     assert response.status_code == 200
     assert response.json() == molecules
 
+
 def test_list_all_molecules_empty():
     db = setup_db_override()
     mock_fetch_all_return_values(db, [])
     response = client.get("/getall")
     assert response.status_code == 200
     assert response.json() == []
+
 
 @patch("src.main.substructure_search")
 def test_sub_search(mock_substructure_search):
@@ -136,6 +150,7 @@ def test_sub_search(mock_substructure_search):
     response = client.get("/subsearch", params={"substructure": "CCO"})
     assert response.status_code == 200
     assert response.json() == ["CCO", "NCCO"]
+
 
 def test_sub_search_no_matches():
     db = setup_db_override()

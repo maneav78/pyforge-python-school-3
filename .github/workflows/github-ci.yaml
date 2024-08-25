@@ -6,7 +6,6 @@ on:
       - 'main'
       - 'postgres-branch'
   
-
 jobs:
   testing:
     runs-on: ubuntu-20.04
@@ -25,6 +24,14 @@ jobs:
 
       - name: Docker-compose
         run: docker-compose up --build -d
+        env:
+          DB_URL: ${{ secrets.DB_URL }}
+          MAIN_DATABASE_URL: ${{ secrets.MAIN_DATABASE_URL }}
+          TEST_DB_NAME: ${{ secrets.TEST_DB_NAME }}
+          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
 
       - name: Checking Containers
         run: docker ps 
@@ -58,14 +65,3 @@ jobs:
           checkName: 'flake8' 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
-
-
-
-
-
-
-
-
- 
