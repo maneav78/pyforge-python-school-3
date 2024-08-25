@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - 'main'
-      - 'github-action-branch'
+      - 'postgres-branch'
   
 
 jobs:
