@@ -5,6 +5,8 @@ on:
     branches:
       - 'main'
       - 'postgres-branch'
+      - 'test-branch'
+      - 'logging'
   
 jobs:
   testing:
@@ -37,8 +39,9 @@ jobs:
 
       - name: Run tests and capture logs
         run: |
-              docker logs pyforge-python-school-3_test_1
-              docker logs pyforge-python-school-3_test_1 | grep "9 passed" || exit 1
+              docker logs pyforge-python-school-3_web1 
+              docker logs pyforge-python-school-3_web2
+              (docker logs pyforge-python-school-3_web1 | grep "9 passed" || docker logs pyforge-python-school-3_web2 | grep "9 passed") || exit 1
 
   flake8:
     runs-on: ubuntu-20.04

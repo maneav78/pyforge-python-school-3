@@ -6,6 +6,9 @@ services:
     environment:
       SERVER_ID: SERVER-1
       DB_URL: ${DB_URL}
+      MAIN_DATABASE_URL: ${MAIN_DATABASE_URL}
+      TEST_DB_NAME: ${TEST_DB_NAME}
+      TEST_DATABASE_URL: ${TEST_DATABASE_URL}
     depends_on:
       postgres:
         condition: service_healthy
@@ -17,6 +20,9 @@ services:
     environment:
       SERVER_ID: SERVER-2
       DB_URL: ${DB_URL}
+      MAIN_DATABASE_URL: ${MAIN_DATABASE_URL}
+      TEST_DB_NAME: ${TEST_DB_NAME}
+      TEST_DATABASE_URL: ${TEST_DATABASE_URL}
     depends_on:
       postgres:
         condition: service_healthy
@@ -27,18 +33,6 @@ services:
       - "81:80"
     volumes:
       - ./nginx:/etc/nginx/conf.d
-    depends_on:
-      - web1
-      - web2
-
-  test:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    environment:
-      MAIN_DATABASE_URL: ${MAIN_DATABASE_URL}
-      TEST_DB_NAME: ${TEST_DB_NAME}
-      TEST_DATABASE_URL: ${TEST_DATABASE_URL}
     depends_on:
       - web1
       - web2
