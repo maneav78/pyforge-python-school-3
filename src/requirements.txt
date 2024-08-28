@@ -34,7 +34,6 @@ pluggy==1.5.0
 port-for==0.7.2
 psutil==6.0.0
 psycopg==3.2.1
-psycopg2==2.9.9
 psycopg2-binary==2.9.9
 pydantic==2.8.2
 pydantic_core==2.20.1
