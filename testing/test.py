@@ -115,10 +115,11 @@ def mock_fetch_all_return_values(db, values):
 
 def test_list_all_molecules():
     db = setup_db_override()
+    # Updated keys to match the expected database schema
     molecules = [
-        {"id": 1, "smiles": "CCO"},
-        {"id": 2, "smiles": "C1=CC=CC=C1"},
-        {"id": 3, "smiles": "NCCO"}
+        {"identifier": 1, "smiles": "CCO"},
+        {"identifier": 2, "smiles": "C1=CC=CC=C1"},
+        {"identifier": 3, "smiles": "NCCO"}
     ]
     add_molecule(client, 1, "CCO")
     add_molecule(client, 2, "C1=CC=CC=C1")
