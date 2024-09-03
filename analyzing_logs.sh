@@ -1,4 +1,4 @@
-container_name="pyforge-python-school-3-web1"
+container_name="pyforge-python-school-3_web1"
 sleep 7
 
 container_hash=$(docker ps -aqf "name=$container_name")
