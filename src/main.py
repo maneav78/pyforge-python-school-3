@@ -136,11 +136,12 @@ async def list_all_molecules(limit: int = 100, db: Database = Depends(get_db)):
             results.append(row)
             count += 1
             logger.info(f"Yielding molecule {count} with ID: {row['identifier']}")
-        
-        return results  
+
+            return results
     except Exception as e:
         logger.error(f"An error occurred: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
 
 @app.get("/subsearch")
 async def sub_search(substructure: str, db: Database = Depends(get_db)):
