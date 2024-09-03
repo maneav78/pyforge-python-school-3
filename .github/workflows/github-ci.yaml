@@ -27,6 +27,10 @@ jobs:
       - name: Docker-compose
         run: docker-compose up --build -d
         env:
+          DB_URL: ${{ secrets.DB_URL }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
           MAIN_DATABASE_URL: ${{ secrets.MAIN_DATABASE_URL }}
           TEST_DB_NAME: ${{ secrets.TEST_DB_NAME }}
           TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
@@ -35,7 +39,7 @@ jobs:
         run: |
               chmod +x printing_logs.sh
               ./printing_logs.sh
-              
+
       - name: Checking Containers
         run: docker ps 
 
