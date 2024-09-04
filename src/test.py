@@ -17,7 +17,7 @@ TEST_DB_NAME = os.getenv("TEST_DB_NAME")
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 
 with psycopg2.connect(MAIN_DATABASE_URL) as conn:
-    conn.autocommit = True
+    conn.autocommit = True  # Enable autocommit mode
     with conn.cursor() as cur:
         cur.execute(
             sql.SQL("SELECT 1 FROM pg_database WHERE datname = %s"),
@@ -25,7 +25,7 @@ with psycopg2.connect(MAIN_DATABASE_URL) as conn:
         )
         exists = cur.fetchone()
         if not exists:
-            cur.execute(f"CREATE DATABASE {TEST_DB_NAME}")
+            cur.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(TEST_DB_NAME)))
 
 test_engine = create_engine(TEST_DATABASE_URL)
 test_database = Database(TEST_DATABASE_URL)
