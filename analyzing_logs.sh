@@ -1,5 +1,5 @@
 container_name="pyforge-python-school-3_web1"
-sleep 7
+sleep 10
 
 container_hash=$(docker ps -aqf "name=$container_name")
 
