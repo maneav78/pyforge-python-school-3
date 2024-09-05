@@ -81,7 +81,7 @@ def test_postgres_connection(db_connection):
 
 @pytest.fixture()
 def client():
-    return TestClient(app)  # Create a TestClient instance with your FastAPI app
+    return TestClient(app)
 
 
 def override_get_db(initial_fetch_one_value=None):
@@ -204,7 +204,7 @@ async def test_sub_search_cache_miss(client, mock_cache):
     mock_rows = [{"smiles": "CCO"}, {"smiles": "C1=CC=CC=C1"}]
     db.fetch_all = AsyncMock(return_value=mock_rows)
     with patch("src.main.substructure_search", return_value=["CCO"]) as mock_substructure_search:
-        response = client.get("/subsearch", params={"substructure": substructure})
+        response = await client.get("/subsearch", params={"substructure": substructure})
         assert response.status_code == 200
         assert response.json() == {"source": "database", "data": ["CCO"]}
         mock_get_cached_result.assert_called_once_with(f"subsearch:{substructure}")
