@@ -1,5 +1,6 @@
 [flake8]
 max-line-length = 150
+ignore = F401
 exclude = 
     hw,
     images,

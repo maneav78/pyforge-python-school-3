@@ -7,8 +7,13 @@ from rdkit import Chem
 import os
 from dotenv import load_dotenv
 from pydantic import BaseModel
+import redis
+import json
+
 
 app = FastAPI()
+
+redis_client = redis.Redis(host='redis', port=6379, db=0)
 
 load_dotenv(".env")
 
@@ -40,6 +45,18 @@ logger = logging.getLogger(__name__)
 class Molecule(BaseModel):
     id: int
     smiles: str
+
+
+# redis functions
+def get_cached_result(key: str):
+    result = redis_client.get(key)
+    if result:
+        return json.loads(result)
+    return None
+
+
+def set_cache(key: str, value: dict, expiration: int = 60):
+    redis_client.setex(key, expiration, json.dumps(value))
 
 
 async def substructure_search(mols, mol):
@@ -145,9 +162,17 @@ async def list_all_molecules(limit: int = 100, db: Database = Depends(get_db)):
 
 @app.get("/subsearch")
 async def sub_search(substructure: str, db: Database = Depends(get_db)):
+    cache_key = f"subsearch:{substructure}"
+    cached_result = get_cached_result(cache_key)
+
+    if cached_result is not None:
+        logger.info(f"Returning cached result for substructure: {substructure}")
+        return {"source": "cache", "data": cached_result}
+
     query = select(molecules.c.smiles)
     rows = await db.fetch_all(query)
     molecules_list = [row["smiles"] for row in rows]
     matches = await substructure_search(molecules_list, substructure)
+    set_cache(cache_key, matches, expiration=300)
     logger.info(f"Substructure search completed with {len(matches)} matches.")
     return matches
