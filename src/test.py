@@ -8,6 +8,7 @@ import os
 import psycopg2
 from psycopg2 import sql
 import pytest
+from httpx import AsyncClient
 from src.main import app, get_db
 
 load_dotenv(".env")
@@ -52,8 +53,6 @@ try:
 finally:
     conn.close()
 
-if not exists:
-    create_database(TEST_DB_NAME)
 
 test_engine = create_engine(TEST_DATABASE_URL)
 test_database = Database(TEST_DATABASE_URL)
@@ -80,13 +79,16 @@ def test_postgres_connection(db_connection):
         pytest.fail(f"Database connection failed: {e}")
 
 
-client = TestClient(app)
+@pytest.fixture()
+def client():
+    return TestClient(app)  # Create a TestClient instance with your FastAPI app
 
 
 def override_get_db(initial_fetch_one_value=None):
     db = MagicMock()
     db.fetch_one = AsyncMock(return_value=initial_fetch_one_value)
     db.execute = AsyncMock(return_value=None)
+    db.fetch_all = AsyncMock(return_value=[])
     return db
 
 
@@ -102,12 +104,12 @@ def add_molecule(client, molecule_id, smiles):
     assert response.json() == {"message": f"Molecule '{molecule_id}' added successfully."}
 
 
-def test_add_molecule():
+def test_add_molecule(client):
     setup_db_override()
     add_molecule(client, 1, "CCO")
 
 
-def test_get_molecule():
+def test_get_molecule(client):
     setup_db_override({"smiles": "CCO"})
     add_molecule(client, 1, "CCO")
     response = client.get("/get", params={"id": 1})
@@ -115,7 +117,7 @@ def test_get_molecule():
     assert response.json() == "CCO"
 
 
-def test_update_molecule():
+def test_update_molecule(client):
     db = setup_db_override({"smiles": "CCO"})
     add_molecule(client, 3, "CCO")
     response = client.put("/update", json={"id": 3, "smiles": "c1ccccc1"})
@@ -127,7 +129,7 @@ def test_update_molecule():
     assert response.json() == "c1ccccc1"
 
 
-def test_delete_molecule():
+def test_delete_molecule(client):
     db = setup_db_override({"smiles": "CCO"})
     add_molecule(client, 4, "CCO")
     response = client.delete("/del", params={"id": 4})
@@ -145,7 +147,7 @@ def mock_fetch_all_return_values(db, values):
     db.fetch_all = mock_fetch_all
 
 
-def test_list_all_molecules():
+def test_list_all_molecules(client):
     db = setup_db_override()
     molecules = [
         {"identifier": 1, "smiles": "CCO"},
@@ -161,7 +163,7 @@ def test_list_all_molecules():
     assert response.json() == molecules
 
 
-def test_list_all_molecules_empty():
+def test_list_all_molecules_empty(client):
     db = setup_db_override()
     mock_fetch_all_return_values(db, [])
     response = client.get("/getall")
@@ -169,29 +171,42 @@ def test_list_all_molecules_empty():
     assert response.json() == []
 
 
-# @patch("src.main.substructure_search")
-# def test_sub_search(mock_substructure_search):
-#     db = setup_db_override()
-#     molecules = [
-#         {"smiles": "CCO"},
-#         {"smiles": "C1=CC=CC=C1"},
-#         {"smiles": "NCCO"}
-#     ]
-#     mock_fetch_all_return_values(db, molecules)
-#     mock_substructure_search.return_value = ["CCO", "NCCO"]
-#     response = client.get("/subsearch", params={"substructure": "CCO"})
-#     assert response.status_code == 200
-#     assert response.json() == ["CCO", "NCCO"]
+@pytest.fixture
+def mock_cache():
+    with patch("src.main.get_cached_result") as mock_get_cached_result, \
+         patch("src.main.set_cache") as mock_set_cache:
+        yield mock_get_cached_result, mock_set_cache
 
-# def test_sub_search_no_matches():
-#     db = setup_db_override()
-#     molecules = [
-#         {"smiles": "CCO"},
-#         {"smiles": "C1=CC=CC=C1"},
-#         {"smiles": "NCCO"}
-#     ]
-#     mock_fetch_all_return_values(db, molecules)
-#     with patch("src.main.substructure_search", return_value=[]):
-#         response = client.get("/subsearch", params={"substructure": "XYZ"})
-#         assert response.status_code == 200
-#         assert response.json() == []
+
+@pytest.mark.asyncio
+@patch("src.main.substructure_search", new_callable=AsyncMock)
+async def test_sub_search_cache_hit(mock_substructure_search):
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        substructure = "CCO"
+        mock_substructure_search.return_value = ["CCO"]
+
+        with patch("src.main.get_cached_result", return_value=["CCO"]), \
+             patch("src.main.set_cache") as mock_set_cache:
+            response = await client.get("/subsearch", params={"substructure": substructure})
+
+            assert response.status_code == 200
+            assert response.json() == {"source": "cache", "data": ["CCO"]}
+            mock_substructure_search.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sub_search_cache_miss(client, mock_cache):
+    db = setup_db_override()
+    mock_get_cached_result, mock_set_cache = mock_cache
+    substructure = "CCO"
+    mock_get_cached_result.return_value = None
+
+    mock_rows = [{"smiles": "CCO"}, {"smiles": "C1=CC=CC=C1"}]
+    db.fetch_all = AsyncMock(return_value=mock_rows)
+    with patch("src.main.substructure_search", return_value=["CCO"]) as mock_substructure_search:
+        response = client.get("/subsearch", params={"substructure": substructure})
+        assert response.status_code == 200
+        assert response.json() == {"source": "database", "data": ["CCO"]}
+        mock_get_cached_result.assert_called_once_with(f"subsearch:{substructure}")
+        mock_set_cache.assert_called_once_with(f"subsearch:{substructure}", ["CCO"], expiration=300)
+        mock_substructure_search.assert_called_once_with(["CCO", "C1=CC=CC=C1"], substructure)

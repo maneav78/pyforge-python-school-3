@@ -5,5 +5,5 @@ container_hash=$(docker ps -aqf "name=$container_name")
 
 logs=$(docker logs $container_hash)
 echo "$logs" 
-echo "$logs" | grep "7 passed" || exit 1
+echo "$logs" | grep "9 passed" || exit 1
 

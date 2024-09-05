@@ -163,16 +163,21 @@ async def list_all_molecules(limit: int = 100, db: Database = Depends(get_db)):
 @app.get("/subsearch")
 async def sub_search(substructure: str, db: Database = Depends(get_db)):
     cache_key = f"subsearch:{substructure}"
-    cached_result = get_cached_result(cache_key)
+    try:
+        cached_result = get_cached_result(cache_key)
 
-    if cached_result is not None:
-        logger.info(f"Returning cached result for substructure: {substructure}")
-        return {"source": "cache", "data": cached_result}
+        if cached_result is not None:
+            logger.info(f"Returning cached result for substructure: {substructure}")
+            return {"source": "cache", "data": cached_result}
 
-    query = select(molecules.c.smiles)
-    rows = await db.fetch_all(query)
-    molecules_list = [row["smiles"] for row in rows]
-    matches = await substructure_search(molecules_list, substructure)
-    set_cache(cache_key, matches, expiration=300)
-    logger.info(f"Substructure search completed with {len(matches)} matches.")
-    return matches
+        query = select(molecules.c.smiles)
+        rows = await db.fetch_all(query)
+        molecules_list = [row["smiles"] for row in rows]
+        matches = await substructure_search(molecules_list, substructure)
+        set_cache(cache_key, matches, expiration=300)
+        logger.info(f"Substructure search completed with {len(matches)} matches.")
+        return {"source": "database", "data": matches}
+
+    except Exception as e:
+        logger.error(f"An error occurred during substructure search: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
