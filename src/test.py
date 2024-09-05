@@ -46,10 +46,22 @@ def create_database(db_name):
         conn.close()
 
 
+def drop_existing_schema(engine):
+    inspector = inspect(engine)
+    # Drop all tables
+    for table_name in inspector.get_table_names():
+        engine.execute(f"DROP TABLE IF EXISTS {table_name} CASCADE")
+    # Drop all sequences
+    for seq_name in inspector.get_sequence_names():
+        engine.execute(f"DROP SEQUENCE IF EXISTS {seq_name} CASCADE")
+
+
 conn = psycopg2.connect(MAIN_DATABASE_URL)
 try:
     conn.autocommit = True
     check_database_exists(conn, TEST_DB_NAME)
+    if not exists:
+        create_database(TEST_DB_NAME)
 finally:
     conn.close()
 
@@ -58,8 +70,13 @@ test_engine = create_engine(TEST_DATABASE_URL)
 test_database = Database(TEST_DATABASE_URL)
 metadata = MetaData()
 
-if not inspect(test_engine).has_table("molecules"):
+
+@pytest.fixture(scope="function", autouse=True)
+def setup_and_teardown_db():
+    drop_existing_schema(test_engine)
     metadata.create_all(test_engine, checkfirst=True)
+    yield
+    metadata.drop_all(test_engine)
 
 
 @pytest.fixture
@@ -204,7 +221,7 @@ async def test_sub_search_cache_miss(client, mock_cache):
     mock_rows = [{"smiles": "CCO"}, {"smiles": "C1=CC=CC=C1"}]
     db.fetch_all = AsyncMock(return_value=mock_rows)
     with patch("src.main.substructure_search", return_value=["CCO"]) as mock_substructure_search:
-        response = await client.get("/subsearch", params={"substructure": substructure})
+        response = client.get("/subsearch", params={"substructure": substructure})
         assert response.status_code == 200
         assert response.json() == {"source": "database", "data": ["CCO"]}
         mock_get_cached_result.assert_called_once_with(f"subsearch:{substructure}")
