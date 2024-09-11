@@ -4,6 +4,7 @@ services:
     volumes:
       - ./src:/src
     environment:
+      PYTHONPATH: /src/src
       SERVER_ID: SERVER-1
       DB_URL: ${DB_URL}
       MAIN_DATABASE_URL: ${MAIN_DATABASE_URL}
@@ -19,6 +20,7 @@ services:
     volumes:
       - ./src:/src
     environment:
+      PYTHONPATH: /src/src
       SERVER_ID: SERVER-2
       DB_URL: ${DB_URL}
       MAIN_DATABASE_URL: ${MAIN_DATABASE_URL}
@@ -71,6 +73,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  celery_worker:
+    build: ./src
+    command: celery -A src.celery_worker worker --loglevel=info
+    environment:
+      - PYTHONPATH=/src/src
+    depends_on:
+      - redis
+      - postgres
+      - web1
+      - web2 #try without this 
+    volumes:
+      - .:/src
 
 volumes:
   pgdata:

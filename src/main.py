@@ -1,14 +1,16 @@
-import logging
 from databases import Database
 from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, inspect, select
 from fastapi import FastAPI, HTTPException, Depends
 from contextlib import asynccontextmanager
-from rdkit import Chem
 import os
 from dotenv import load_dotenv
 from pydantic import BaseModel
 import redis
 import json
+from celery.result import AsyncResult
+from celery_worker import celery
+from tasks import substructure_search_task
+from utils import logger
 
 
 app = FastAPI()
@@ -37,11 +39,6 @@ inspector = inspect(engine)
 if not inspector.has_table('molecules'):
     metadata.create_all(engine)
 
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
 class Molecule(BaseModel):
     id: int
     smiles: str
@@ -57,27 +54,6 @@ def get_cached_result(key: str):
 
 def set_cache(key: str, value: dict, expiration: int = 60):
     redis_client.setex(key, expiration, json.dumps(value))
-
-
-async def substructure_search(mols, mol):
-    logger.info("Starting substructure search")
-    substructure = Chem.MolFromSmiles(mol)
-    if substructure is None:
-        logger.error(f'Invalid substructure SMILES: {mol}')
-        raise ValueError(f'Invalid substructure SMILES: {mol}')
-    substructure_num_atoms = substructure.GetNumAtoms()
-    matches = []
-    for molecule in mols:
-        object_mol = Chem.MolFromSmiles(molecule)
-        if object_mol is None:
-            logger.error("Invalid Molecule!")
-            raise ValueError("Invalid Molecule!")
-        if object_mol.GetNumAtoms() < substructure_num_atoms:
-            continue
-        if object_mol.HasSubstructMatch(substructure):
-            matches.append(molecule)
-    logger.info(f"Substructure search complete, found {len(matches)} matches")
-    return matches
 
 
 @asynccontextmanager
@@ -169,15 +145,29 @@ async def sub_search(substructure: str, db: Database = Depends(get_db)):
         if cached_result is not None:
             logger.info(f"Returning cached result for substructure: {substructure}")
             return {"source": "cache", "data": cached_result}
-
+        
         query = select(molecules.c.smiles)
         rows = await db.fetch_all(query)
         molecules_list = [row["smiles"] for row in rows]
-        matches = await substructure_search(molecules_list, substructure)
-        set_cache(cache_key, matches, expiration=300)
-        logger.info(f"Substructure search completed with {len(matches)} matches.")
-        return {"source": "database", "data": matches}
+        task = substructure_search_task.apply_async(args=[substructure, molecules_list])
+
+        logger.info(f"Substructure search task initiated with task ID: {task.id}")
+        return {"task_id": task.id, "status": "PENDING"}
 
     except Exception as e:
         logger.error(f"An error occurred during substructure search: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+@app.get("/subsearch/{task_id}")
+async def get_task_result(task_id: str):
+    task_result = AsyncResult(task_id, app=celery)
+    if task_result.state == 'PENDING':
+        return {"task_id": task_id, "status": "Task is still processing"}
+    elif task_result.state == 'SUCCESS':
+        return {"task_id": task_id, "status": "Task completed", "result": task_result.result}
+    else:
+        return {"task_id": task_id, "status": task_result.state}
+
+    
+
