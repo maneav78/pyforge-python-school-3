@@ -4,6 +4,7 @@ from rdkit import Chem
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 async def substructure_search(mols, mol):
     logger.info("Starting substructure search")
     substructure = Chem.MolFromSmiles(mol)

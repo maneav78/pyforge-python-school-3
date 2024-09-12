@@ -39,6 +39,7 @@ inspector = inspect(engine)
 if not inspector.has_table('molecules'):
     metadata.create_all(engine)
 
+
 class Molecule(BaseModel):
     id: int
     smiles: str
@@ -145,7 +146,7 @@ async def sub_search(substructure: str, db: Database = Depends(get_db)):
         if cached_result is not None:
             logger.info(f"Returning cached result for substructure: {substructure}")
             return {"source": "cache", "data": cached_result}
-        
+
         query = select(molecules.c.smiles)
         rows = await db.fetch_all(query)
         molecules_list = [row["smiles"] for row in rows]
@@ -168,6 +169,3 @@ async def get_task_result(task_id: str):
         return {"task_id": task_id, "status": "Task completed", "result": task_result.result}
     else:
         return {"task_id": task_id, "status": task_result.state}
-
-    
-

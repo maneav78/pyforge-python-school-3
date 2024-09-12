@@ -196,34 +196,93 @@ def mock_cache():
 
 
 @pytest.mark.asyncio
-@patch("src.main.substructure_search", new_callable=AsyncMock)
-async def test_sub_search_cache_hit(mock_substructure_search):
+async def test_sub_search_cache_hit(mock_cache):
+    mock_get_cached_result, _ = mock_cache
+    mock_get_cached_result.return_value = ["CCO"]
     async with AsyncClient(app=app, base_url="http://test") as client:
         substructure = "CCO"
-        mock_substructure_search.return_value = ["CCO"]
+        response = await client.get("/subsearch", params={"substructure": substructure})
 
-        with patch("src.main.get_cached_result", return_value=["CCO"]), \
-             patch("src.main.set_cache") as mock_set_cache:
-            response = await client.get("/subsearch", params={"substructure": substructure})
+        assert response.status_code == 200
+        assert response.json() == {"source": "cache", "data": ["CCO"]}
+        mock_get_cached_result.assert_called_once_with(f"subsearch:{substructure}")
 
-            assert response.status_code == 200
-            assert response.json() == {"source": "cache", "data": ["CCO"]}
-            mock_substructure_search.assert_not_called()
+
+@pytest.fixture
+def mock_substructure_search_task():
+    with patch("src.main.substructure_search_task") as mock:
+        yield mock
+
+
+@pytest.fixture
+def mock_get_db():
+    with patch("src.main.get_db") as mock:
+        yield mock
+
+
+def test_sub_search_without_cache(client, mock_cache, mock_substructure_search_task, mock_get_db):
+    mock_get_cached_result, _ = mock_cache
+    mock_get_cached_result.return_value = None
+
+    mock_substructure_search_task.apply_async.return_value.id = "test_task_id"
+
+    mock_db = mock_get_db.return_value
+    mock_db.fetch_all.return_value = [
+        {"identifier": 1, "smiles": "CCO"},
+        {"identifier": 2, "smiles": "C1=CC=CC=C1"},
+        {"identifier": 3, "smiles": "NCCO"}
+    ]
+
+    response = client.get("/subsearch", params={"substructure": "CCO"})
+
+    assert response.status_code == 200
+    assert response.json() == {"task_id": "test_task_id", "status": "PENDING"}
+    assert mock_substructure_search_task.apply_async.called
 
 
 @pytest.mark.asyncio
-async def test_sub_search_cache_miss(client, mock_cache):
-    db = setup_db_override()
-    mock_get_cached_result, mock_set_cache = mock_cache
-    substructure = "CCO"
-    mock_get_cached_result.return_value = None
+@patch('src.main.AsyncResult')
+async def test_get_task_result_success(mock_async_result):
+    task_id = 'task-id'
 
-    mock_rows = [{"smiles": "CCO"}, {"smiles": "C1=CC=CC=C1"}]
-    db.fetch_all = AsyncMock(return_value=mock_rows)
-    with patch("src.main.substructure_search", return_value=["CCO"]) as mock_substructure_search:
-        response = client.get("/subsearch", params={"substructure": substructure})
-        assert response.status_code == 200
-        assert response.json() == {"source": "database", "data": ["CCO"]}
-        mock_get_cached_result.assert_called_once_with(f"subsearch:{substructure}")
-        mock_set_cache.assert_called_once_with(f"subsearch:{substructure}", ["CCO"], expiration=300)
-        mock_substructure_search.assert_called_once_with(["CCO", "C1=CC=CC=C1"], substructure)
+    mock_result = mock_async_result.return_value
+    mock_result.state = 'SUCCESS'
+    mock_result.result = {'data': 'some result'}
+
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        response = await client.get(f"/subsearch/{task_id}")
+
+    assert response.status_code == 200
+    assert response.json() == {"task_id": task_id, "status": "Task completed", "result": {'data': 'some result'}}
+
+
+@pytest.mark.asyncio
+async def test_get_task_result_failed():
+    task_id = 'task-id'
+
+    mock_result = MagicMock()
+    mock_result.state = 'FAILURE'
+    mock_result.result = None
+
+    with patch('src.main.AsyncResult', return_value=mock_result):
+        async with AsyncClient(app=app, base_url="http://test") as client:
+            response = await client.get(f"/subsearch/{task_id}")
+
+    assert response.status_code == 200
+    assert response.json() == {"task_id": task_id, "status": 'FAILURE'}
+
+
+@pytest.mark.asyncio
+@patch('src.main.AsyncResult')
+async def test_get_task_result_pending(mock_async_result):
+    task_id = 'task-id'
+
+    mock_result = mock_async_result.return_value
+    mock_result.state = 'PENDING'
+    mock_result.result = None
+
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        response = await client.get(f"/subsearch/{task_id}")
+
+    assert response.status_code == 200
+    assert response.json() == {"task_id": task_id, "status": "Task is still processing"}
