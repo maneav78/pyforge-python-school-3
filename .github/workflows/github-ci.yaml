@@ -4,9 +4,12 @@ on:
   push:
     branches:
       - 'main'
-      - 'github-action-branch'
+      - 'postgres-branch'
+      - 'test-branch'
+      - 'logging'
+      - 'celery-branch'
+      - 'redis-branch'
   
-
 jobs:
   testing:
     runs-on: ubuntu-20.04
@@ -25,6 +28,15 @@ jobs:
 
       - name: Docker-compose
         run: docker-compose up --build -d
+        env:
+          DB_URL: ${{ secrets.DB_URL }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          MAIN_DATABASE_URL: ${{ secrets.MAIN_DATABASE_URL }}
+          TEST_DB_NAME: ${{ secrets.TEST_DB_NAME }}
+          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+
 
       - name: Checking Containers
         run: docker ps 
@@ -32,10 +44,10 @@ jobs:
       - name: Wait for container to stabilize
         run: sleep 5
 
-      - name: Run tests and capture logs
+      - name: Analyzing logs
         run: |
-              docker logs pyforge-python-school-3_test_1
-              docker logs pyforge-python-school-3_test_1 | grep "8 passed" || exit 1
+              chmod +x analyzing_logs.sh 
+              ./analyzing_logs.sh
 
   flake8:
     runs-on: ubuntu-20.04
@@ -58,14 +70,3 @@ jobs:
           checkName: 'flake8' 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
-
-
-
-
-
-
-
-
- 

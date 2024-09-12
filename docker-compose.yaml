@@ -4,31 +4,91 @@ services:
     volumes:
       - ./src:/src
     environment:
+      PYTHONPATH: /src/src
       SERVER_ID: SERVER-1
-
+      DB_URL: ${DB_URL}
+      MAIN_DATABASE_URL: ${MAIN_DATABASE_URL}
+      TEST_DB_NAME: ${TEST_DB_NAME}
+      TEST_DATABASE_URL: ${TEST_DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      
 
   web2:
     build: ./src
     volumes:
       - ./src:/src
     environment:
+      PYTHONPATH: /src/src
       SERVER_ID: SERVER-2
-
+      DB_URL: ${DB_URL}
+      MAIN_DATABASE_URL: ${MAIN_DATABASE_URL}
+      TEST_DB_NAME: ${TEST_DB_NAME}
+      TEST_DATABASE_URL: ${TEST_DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   nginx:
     image: nginx:latest
     ports:
-      - "80:80"
+      - "81:80"
     volumes:
       - ./nginx:/etc/nginx/conf.d
     depends_on:
       - web1
       - web2
 
-  test:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data/pgdata
+      - ./docker-entrypoint-initdb.d/:/docker-entrypoint-initdb.d/  
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  celery_worker:
+    build: ./src
+    command: celery -A src.celery_worker worker --loglevel=info
+    environment:
+      - PYTHONPATH=/src/src
     depends_on:
+      - redis
+      - postgres
       - web1
-      - web2
+      - web2 #try without this 
+    volumes:
+      - .:/src
+
+volumes:
+  pgdata:
+    driver: local
+
+
