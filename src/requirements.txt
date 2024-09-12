@@ -42,3 +42,6 @@ typing_extensions==4.12.2
 uvicorn==0.30.3
 watchfiles==0.22.0
 websockets==12.0
+databases
+asyncpg
+psycopg2-binary==2.9.9

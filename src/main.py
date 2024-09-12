@@ -1,15 +1,43 @@
-from fastapi import FastAPI, HTTPException
+from databases import Database
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, inspect, select
+from fastapi import FastAPI, HTTPException, Depends
+from contextlib import asynccontextmanager
 from rdkit import Chem
-import sqlite3
-from sqlite3 import Error
-from os import getenv
+import os
+from dotenv import load_dotenv
+from pydantic import BaseModel
 
 app = FastAPI()
 
-db = "molecules.db"
+load_dotenv(".env")
+
+DB_URL = os.getenv("DB_URL")
+
+if DB_URL is None:
+    raise ValueError("DATABASE_URL is not set in the environment variables")
+
+database = Database(DB_URL)
+metadata = MetaData()
+
+molecules = Table(
+    "molecules",
+    metadata,
+    Column("identifier", Integer, primary_key=True),
+    Column("smiles", String, nullable=False)
+)
+
+engine = create_engine(DB_URL)
+inspector = inspect(engine)
+if not inspector.has_table('molecules'):
+    metadata.create_all(engine)
 
 
-def substructure_search(mols, mol):
+class Molecule(BaseModel):
+    id: int
+    smiles: str
+
+
+async def substructure_search(mols, mol):
     substructure = Chem.MolFromSmiles(mol)
     if substructure is None:
         raise ValueError(f'Invalid substructure SMILES: {mol}')
@@ -26,162 +54,66 @@ def substructure_search(mols, mol):
     return matches
 
 
-def get_connection():
-    connection = None
-    try:
-        connection = sqlite3.connect(db)
-        print(f"Connected to SQLite database: {sqlite3.version}")
-        return connection
-    except Error as e:
-        print(e)
-    return connection
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await database.connect()
+    yield
+    await database.disconnect()
+
+app.router.lifespan_context = lifespan
 
 
-def create_table():
-    connection = get_connection()
-    sql_code = """
-    CREATE TABLE IF NOT EXISTS molecules (
-        identifier INTEGER PRIMARY KEY,
-        smiles TEXT NOT NULL
-    )
-    """
-    try:
-        c = connection.cursor()
-        c.execute(sql_code)
-        connection.commit()
-        print("Table 'molecules' created successfully.")
-    except Error as e:
-        print(e)
-    finally:
-        if connection:
-            connection.close()
-
-
-@app.on_event("startup")
-def startup_event():
-    create_table()
+async def get_db() -> Database:
+    return database
 
 
 @app.get("/")
-def get_server():
-    return {"server_id": getenv("SERVER_ID", "1")}
+async def get_server():
+    return {"server_id": os.getenv("SERVER_ID", "1")}
 
 
 @app.post("/add")
-def add_molecule(id: int, smiles: str):
-    connection = get_connection()
-    sql_code = """
-    INSERT INTO molecules (identifier, smiles)
-    VALUES (?, ?)
-    """
-    try:
-        c = connection.cursor()
-        c.execute(sql_code, (id, smiles))
-        connection.commit()
-        return {"message": f"Molecule '{id}' added successfully."}
-    except Error as e:
-        print(f"Error occurred: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if connection:
-            connection.close()
+async def add_molecule(molecule: Molecule, db: Database = Depends(get_db)):
+    query = molecules.insert().values(identifier=molecule.id, smiles=molecule.smiles)
+    await db.execute(query)
+    return {"message": f"Molecule '{molecule.id}' added successfully."}
 
 
 @app.get("/get")
-def get_molecule(id: int):
-    connection = get_connection()
-    sql_code = """
-    SELECT smiles FROM molecules WHERE identifier = ?
-    """
-    try:
-        c = connection.cursor()
-        c.execute(sql_code, (id,))
-        row = c.fetchone()
-        if row:
-            return row[0]
-        else:
-            raise HTTPException(status_code=404, detail="Molecule not found")
-    except Error as e:
-        print(f"Error occurred: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if connection:
-            connection.close()
+async def get_molecule(id: int, db: Database = Depends(get_db)):
+    query = select(molecules.c.smiles).where(molecules.c.identifier == id)
+    result = await db.fetch_one(query)
+    if result:
+        return result["smiles"]
+    else:
+        raise HTTPException(status_code=404, detail="Molecule not found")
 
 
 @app.put("/update")
-def update_molecule(id: int, smiles: str):
-    connection = get_connection()
-    sql_code = """
-    UPDATE molecules SET smiles = ? WHERE identifier = ?
-    """
-    try:
-        c = connection.cursor()
-        c.execute(sql_code, (smiles, id))
-        connection.commit()
-        return {"message": f"Molecule '{id}' updated successfully."}
-    except Error as e:
-        print(f"Error occurred: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if connection:
-            connection.close()
+async def update_molecule(molecule: Molecule, db: Database = Depends(get_db)):
+    query = molecules.update().where(molecules.c.identifier == molecule.id).values(smiles=molecule.smiles)
+    await db.execute(query)
+    return {"message": f"Molecule '{molecule.id}' updated successfully."}
 
 
 @app.delete("/del")
-def delete_molecule(id: int):
-    connection = get_connection()
-    sql_code = """
-    DELETE FROM molecules WHERE identifier = ?
-    """
-    try:
-        c = connection.cursor()
-        c.execute(sql_code, (id,))
-        connection.commit()
-        return {"message": f"Molecule '{id}' deleted successfully."}
-    except Error as e:
-        print(f"Error occurred: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if connection:
-            connection.close()
+async def delete_molecule(id: int, db: Database = Depends(get_db)):
+    query = molecules.delete().where(molecules.c.identifier == id)
+    await db.execute(query)
+    return {"message": f"Molecule '{id}' deleted successfully."}
 
 
 @app.get("/getall")
-def list_all_molecules():
-    connection = get_connection()
-    sql_code = """
-    SELECT identifier, smiles FROM molecules
-    """
-    try:
-        c = connection.cursor()
-        c.execute(sql_code)
-        rows = c.fetchall()
-        return rows
-    except Error as e:
-        print(f"Error occurred: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if connection:
-            connection.close()
+async def list_all_molecules(db: Database = Depends(get_db)):
+    query = select(molecules)
+    rows = await db.fetch_all(query)
+    return rows
 
 
 @app.get("/subsearch")
-def sub_search(substructure: str):
-    connection = get_connection()
-    sql_code = """
-    SELECT smiles FROM molecules
-    """
-    try:
-        c = connection.cursor()
-        c.execute(sql_code)
-        rows = c.fetchall()
-        molecules = [row[0] for row in rows]
-        matches = substructure_search(molecules, substructure)
-        return matches
-    except Error as e:
-        print(f"Error occurred: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if connection:
-            connection.close()
+async def sub_search(substructure: str, db: Database = Depends(get_db)):
+    query = select(molecules.c.smiles)
+    rows = await db.fetch_all(query)
+    molecules_list = [row["smiles"] for row in rows]
+    matches = await substructure_search(molecules_list, substructure)
+    return matches
