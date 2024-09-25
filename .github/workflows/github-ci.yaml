@@ -97,6 +97,9 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} 'echo "SSH connection successful"'
 
+      - name: ls 
+        run: ls -ll 
+        
       - name: Uploading files
         uses: appleboy/scp-action@v0.1.0
         with:
