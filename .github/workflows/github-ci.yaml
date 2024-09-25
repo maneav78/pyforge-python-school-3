@@ -86,10 +86,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Set SSH Key Permissions
+      - name: Set up SSH key
         run: |
+          mkdir -p ~/.ssh 
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+
 
       - name: Test SSH connection
         run: |
