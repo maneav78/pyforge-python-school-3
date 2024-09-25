@@ -9,6 +9,7 @@ on:
       - 'logging'
       - 'celery-branch'
       - 'redis-branch'
+      - 'eks-branch'
   
 jobs:
   testing:
@@ -70,3 +71,27 @@ jobs:
           checkName: 'flake8' 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configuration
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Uploading files
+        uses: appleboy/scp-action@v0.1.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "./" 
+          target: "/home/${{ secrets.SSH_USERNAME }}/app" 
+
+
