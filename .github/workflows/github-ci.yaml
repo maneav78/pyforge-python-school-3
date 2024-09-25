@@ -94,7 +94,7 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "./" 
-          target: "/home/${{ secrets.SSH_USERNAME }}/app"
+          target: "/home"
           debug: true 
 
 
