@@ -102,8 +102,7 @@ jobs:
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key_path: "~/.ssh/id_rsa"  
           source: "./" 
           target: "/home/ubuntu/app"
-          debug: true 
-          use_insecure_cipher: true
+    
