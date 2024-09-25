@@ -108,4 +108,8 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "./" 
           target: "/home/ubuntu/app"
+          debug: true
+          use_insecure_cipher: true
+        env:
+          HOME: /root
     
