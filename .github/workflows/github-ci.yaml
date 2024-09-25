@@ -96,5 +96,6 @@ jobs:
           source: "./" 
           target: "/home"
           debug: true 
+          use_insecure_cipher: true
 
 
