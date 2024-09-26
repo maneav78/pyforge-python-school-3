@@ -91,7 +91,11 @@ jobs:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
         run: |
-          scp -o StrictHostKeyChecking=no -i <(echo "${{ secrets.SSH_PRIVATE_KEY }}") -r ./ ${SSH_USERNAME}@${SSH_HOST}:/home/${SSH_USERNAME}/app
+            echo "${SSH_PRIVATE_KEY}" > private_key.pem
+            chmod 600 private_key.pem
+
+            scp -o StrictHostKeyChecking=no -i private_key.pem -r ./ ${SSH_USERNAME}@${SSH_HOST}:/home/${SSH_USERNAME}/app
+              scp -o StrictHostKeyChecking=no -i <(echo "${{ secrets.SSH_PRIVATE_KEY }}") -r ./ ${SSH_USERNAME}@${SSH_HOST}:/home/${SSH_USERNAME}/app
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v0.1.5
@@ -104,4 +108,7 @@ jobs:
             cd /home/${{ secrets.SSH_USERNAME }}/app
             chmod +x deploy.sh
             
+      - name: Clean up
+        run: |
+          rm -f private_key.pem
     
