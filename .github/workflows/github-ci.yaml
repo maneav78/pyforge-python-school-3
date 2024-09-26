@@ -86,6 +86,13 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+      - name: Transfer files to EC2 via SCP
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+        run: |
+          scp -o StrictHostKeyChecking=no -i <(echo "${{ secrets.SSH_PRIVATE_KEY }}") -r ./ ${SSH_USERNAME}@${SSH_HOST}:/home/${SSH_USERNAME}/app
+
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v0.1.5
         with:
@@ -93,5 +100,8 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22  
-
+          scrip: |
+            cd /home/${{ secrets.SSH_USERNAME }}/app
+            chmod +x deploy.sh
+            
     
