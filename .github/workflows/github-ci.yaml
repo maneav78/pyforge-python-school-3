@@ -97,6 +97,7 @@ jobs:
 
       - name: Copy files to EC2    
         run: |
+          mkidr /home/${{ secrets.SSH_USERNAME }}/app
           scp -o StrictHostKeyChecking=no -r * ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:/home/${{ secrets.SSH_USERNAME }}/app
 
       - name: Deploy to EC2
