@@ -8,3 +8,4 @@ src/molecules.db
 .env
 docker.sh
 .pytest_cache
+invoke_lambda.py
