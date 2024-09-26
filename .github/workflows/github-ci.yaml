@@ -108,6 +108,11 @@ jobs:
           scrip: |
             cd /home/${{ secrets.SSH_USERNAME }}/app
             chmod +x deploy.sh
+
+      - name: View application logs
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} \
+          "docker-compose logs"
             
       - name: Clean up
         run: |
