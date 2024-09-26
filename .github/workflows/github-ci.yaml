@@ -108,6 +108,7 @@ jobs:
           script: |
             cd /home/${{ secrets.SSH_USERNAME }}/app
             chmod +x deploy.sh
+            ./deploy.sh
 
       - name: View application logs
         run: |
