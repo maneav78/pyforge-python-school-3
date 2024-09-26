@@ -86,16 +86,17 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Transfer files to EC2 via SCP
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
-        run: |
-            echo "${SSH_PRIVATE_KEY}" | tr -d '\r' | sed 's/\\n/\n/g' > private_key.pem
-            chmod 600 private_key.pem
+      - name: Install SSH client
+        run: sudo apt-get install -y openssh-clien  
 
-            scp -o StrictHostKeyChecking=no -i private_key.pem -r ./ ${SSH_USERNAME}@${SSH_HOST}:/home/${SSH_USERNAME}/app
-              scp -o StrictHostKeyChecking=no -i <(echo "${{ secrets.SSH_PRIVATE_KEY }}") -r ./ ${SSH_USERNAME}@${SSH_HOST}:/home/${SSH_USERNAME}/app
+      - name: Add SSH key
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Copy files to EC2    
+        run: |
+          scp -o StrictHostKeyChecking=no -r ./path-to-your-files ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:/path-on-ec2
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v0.1.5
