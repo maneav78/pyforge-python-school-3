@@ -91,7 +91,7 @@ jobs:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
         run: |
-            echo "${SSH_PRIVATE_KEY}" > private_key.pem
+            echo "${SSH_PRIVATE_KEY}" | tr -d '\r' | sed 's/\\n/\n/g' > private_key.pem
             chmod 600 private_key.pem
 
             scp -o StrictHostKeyChecking=no -i private_key.pem -r ./ ${SSH_USERNAME}@${SSH_HOST}:/home/${SSH_USERNAME}/app
