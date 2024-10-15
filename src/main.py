@@ -1,75 +1,21 @@
-from databases import Database
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, inspect, select
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from fastapi import FastAPI, HTTPException, Depends
-from contextlib import asynccontextmanager
-import os
-from dotenv import load_dotenv
-from pydantic import BaseModel
-import redis
-import json
 from celery.result import AsyncResult
 from celery_worker import celery
 from tasks import substructure_search_task
 from utils import logger
+from schemas import MoleculeCreate, MoleculeUpdate, MoleculeSchema 
+from models import Molecule as MoleculeModel
+from crud import MoleculeDAO
+from typing import List
+from database import get_db
+from redis_utils import get_cached_result
+from rdkit import Chem
+import os
 
 
 app = FastAPI()
-
-redis_client = redis.Redis(host='redis', port=6379, db=0)
-
-load_dotenv(".env")
-
-DB_URL = os.getenv("DB_URL")
-
-if DB_URL is None:
-    raise ValueError("DATABASE_URL is not set in the environment variables")
-
-database = Database(DB_URL)
-metadata = MetaData()
-
-molecules = Table(
-    "molecules",
-    metadata,
-    Column("identifier", Integer, primary_key=True),
-    Column("smiles", String, nullable=False)
-)
-
-engine = create_engine(DB_URL)
-inspector = inspect(engine)
-if not inspector.has_table('molecules'):
-    metadata.create_all(engine)
-
-
-class Molecule(BaseModel):
-    id: int
-    smiles: str
-
-
-# redis functions
-def get_cached_result(key: str):
-    result = redis_client.get(key)
-    if result:
-        return json.loads(result)
-    return None
-
-
-def set_cache(key: str, value: dict, expiration: int = 60):
-    redis_client.setex(key, expiration, json.dumps(value))
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await database.connect()
-    logger.info("Database connected")
-    yield
-    await database.disconnect()
-    logger.info("Database disconnected")
-
-app.router.lifespan_context = lifespan
-
-
-async def get_db() -> Database:
-    return database
 
 
 @app.get("/")
@@ -79,66 +25,77 @@ async def get_server():
     return {"server_id": server_id}
 
 
-@app.post("/add")
-async def add_molecule(molecule: Molecule, db: Database = Depends(get_db)):
-    query = molecules.insert().values(identifier=molecule.id, smiles=molecule.smiles)
-    await db.execute(query)
-    logger.info(f"Molecule '{molecule.id}' added successfully.")
-    return {"message": f"Molecule '{molecule.id}' added successfully."}
+def is_valid_smiles(smiles: str) -> bool:
+    mol = Chem.MolFromSmiles(smiles)
+    return mol is not None
+
+@app.post("/add", response_model=MoleculeSchema)
+async def add_molecule(molecule: MoleculeCreate, db: Session = Depends(get_db)):
+    if not is_valid_smiles(molecule.smiles):
+        logger.warning(f"Invalid SMILES string: {molecule.smiles}")
+        raise HTTPException(status_code=400, detail="Invalid SMILES string")
+    
+    molecule_dao = MoleculeDAO(db)
+    db_molecule = molecule_dao.create_molecule(molecule)
+    logger.info(f"Molecule '{db_molecule.id}' added successfully.")
+    return db_molecule
+    # return {"message": f"Molecule '{molecule.id}' added successfully."}
 
 
-@app.get("/get")
-async def get_molecule(id: int, db: Database = Depends(get_db)):
-    query = select(molecules.c.smiles).where(molecules.c.identifier == id)
-    result = await db.fetch_one(query)
-    if result:
-        logger.info(f"Molecule '{id}' found.")
-        return result["smiles"]
-    else:
+@app.get("/get", response_model=MoleculeSchema)
+async def get_molecule(id: int, db: Session = Depends(get_db)):
+    molecule_dao = MoleculeDAO(db)
+    db_molecule = molecule_dao.get_molecule(id)
+    if db_molecule is None:
+        logger.warning(f"Molecule '{id}' not found.")
+        raise HTTPException(status_code=404, detail="Molecule not found")
+    logger.info(f"Molecule '{id}' found.")
+    return db_molecule
+
+
+@app.put("/update", response_model=MoleculeSchema)
+async def update_molecule(id: int, molecule: MoleculeUpdate, db: Session = Depends(get_db)):
+    molecule_dao = MoleculeDAO(db)
+    db_molecule = molecule_dao.get_molecule(id)
+    if db_molecule is None:
         logger.warning(f"Molecule '{id}' not found.")
         raise HTTPException(status_code=404, detail="Molecule not found")
 
-
-@app.put("/update")
-async def update_molecule(molecule: Molecule, db: Database = Depends(get_db)):
-    query = molecules.update().where(molecules.c.identifier == molecule.id).values(smiles=molecule.smiles)
-    await db.execute(query)
-    logger.info(f"Molecule '{molecule.id}' updated successfully.")
-    return {"message": f"Molecule '{molecule.id}' updated successfully."}
+    if molecule.smiles and not is_valid_smiles(molecule.smiles):
+        logger.warning(f"Invalid SMILES string: {molecule.smiles}")
+        raise HTTPException(status_code=400, detail="Invalid SMILES string")
+       
+    db_molecule = molecule_dao.update_molecule(db_molecule, molecule)
+    logger.info(f"Molecule '{id}' updated successfully.")
+    return db_molecule
+    # return {"message": f"Molecule '{molecule.id}' updated successfully."}
 
 
 @app.delete("/del")
-async def delete_molecule(id: int, db: Database = Depends(get_db)):
-    query = molecules.delete().where(molecules.c.identifier == id)
-    await db.execute(query)
+async def delete_molecule(id: int, db: Session = Depends(get_db)):
+    molecule_dao = MoleculeDAO(db)
+    db_molecule = molecule_dao.get_molecule(id)
+    if db_molecule is None:
+        logger.warning(f"Molecule '{id}' not found.")
+        raise HTTPException(status_code=404, detail="Molecule not found")
+    molecule_dao.delete_molecule(db_molecule)
     logger.info(f"Molecule '{id}' deleted successfully.")
     return {"message": f"Molecule '{id}' deleted successfully."}
 
 
-@app.get("/getall")
-async def list_all_molecules(limit: int = 100, db: Database = Depends(get_db)):
+@app.get("/getall", response_model=List[MoleculeSchema])
+def list_all_molecules(limit: int = 100, db: Session = Depends(get_db)):
     try:
-        query = select(molecules)
-        rows = await db.fetch_all(query)
-        logger.info(f"Fetched {len(rows)} molecules from the database.")
-
-        count = 0
-        results = []
-        for row in rows:
-            if count >= limit:
-                break
-            results.append(row)
-            count += 1
-            logger.info(f"Yielding molecule {count} with ID: {row['identifier']}")
-
-        return results
-    except Exception as e:
+        molecules = db.query(MoleculeModel).limit(limit).all()
+        logger.info(f"Fetched {len(molecules)} molecules from the database.")
+        return molecules
+    except SQLAlchemyError as e:
         logger.error(f"An error occurred: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 @app.get("/subsearch")
-async def sub_search(substructure: str, db: Database = Depends(get_db)):
+async def sub_search(substructure: str, db: Session = Depends(get_db)):
     cache_key = f"subsearch:{substructure}"
     try:
         cached_result = get_cached_result(cache_key)
@@ -147,10 +104,9 @@ async def sub_search(substructure: str, db: Database = Depends(get_db)):
             logger.info(f"Returning cached result for substructure: {substructure}")
             return {"source": "cache", "data": cached_result}
 
-        query = select(molecules.c.smiles)
-        rows = await db.fetch_all(query)
-        molecules_list = [row["smiles"] for row in rows]
-        task = substructure_search_task.apply_async(args=[substructure, molecules_list])
+        molecules = db.query(MoleculeModel.smiles).all()
+        molecules_list = [m.smiles for m in molecules]
+        task = substructure_search_task.apply_async(args=[substructure, molecules_list])    
 
         logger.info(f"Substructure search task initiated with task ID: {task.id}")
         return {"task_id": task.id, "status": "PENDING"}
