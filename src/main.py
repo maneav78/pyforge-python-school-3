@@ -1,187 +1,171 @@
-from fastapi import FastAPI, HTTPException
-from rdkit import Chem
-import sqlite3
-from sqlite3 import Error
-from os import getenv
+from databases import Database
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, inspect, select
+from fastapi import FastAPI, HTTPException, Depends
+from contextlib import asynccontextmanager
+import os
+from dotenv import load_dotenv
+from pydantic import BaseModel
+import redis
+import json
+from celery.result import AsyncResult
+from celery_worker import celery
+from tasks import substructure_search_task
+from utils import logger
+
 
 app = FastAPI()
 
-db = "molecules.db"
+redis_client = redis.Redis(host='redis', port=6379, db=0)
+
+load_dotenv(".env")
+
+DB_URL = os.getenv("DB_URL")
+
+if DB_URL is None:
+    raise ValueError("DATABASE_URL is not set in the environment variables")
+
+database = Database(DB_URL)
+metadata = MetaData()
+
+molecules = Table(
+    "molecules",
+    metadata,
+    Column("identifier", Integer, primary_key=True),
+    Column("smiles", String, nullable=False)
+)
+
+engine = create_engine(DB_URL)
+inspector = inspect(engine)
+if not inspector.has_table('molecules'):
+    metadata.create_all(engine)
 
 
-def substructure_search(mols, mol):
-    substructure = Chem.MolFromSmiles(mol)
-    if substructure is None:
-        raise ValueError(f'Invalid substructure SMILES: {mol}')
-    substructure_num_atoms = substructure.GetNumAtoms()
-    matches = []
-    for molecule in mols:
-        object_mol = Chem.MolFromSmiles(molecule)
-        if object_mol is None:
-            raise ValueError("Invalid Molecule!")
-        if object_mol.GetNumAtoms() < substructure_num_atoms:
-            continue
-        if object_mol.HasSubstructMatch(substructure):
-            matches.append(molecule)
-    return matches
+class Molecule(BaseModel):
+    id: int
+    smiles: str
 
 
-def get_connection():
-    connection = None
-    try:
-        connection = sqlite3.connect(db)
-        print(f"Connected to SQLite database: {sqlite3.version}")
-        return connection
-    except Error as e:
-        print(e)
-    return connection
+# redis functions
+def get_cached_result(key: str):
+    result = redis_client.get(key)
+    if result:
+        return json.loads(result)
+    return None
 
 
-def create_table():
-    connection = get_connection()
-    sql_code = """
-    CREATE TABLE IF NOT EXISTS molecules (
-        identifier INTEGER PRIMARY KEY,
-        smiles TEXT NOT NULL
-    )
-    """
-    try:
-        c = connection.cursor()
-        c.execute(sql_code)
-        connection.commit()
-        print("Table 'molecules' created successfully.")
-    except Error as e:
-        print(e)
-    finally:
-        if connection:
-            connection.close()
+def set_cache(key: str, value: dict, expiration: int = 60):
+    redis_client.setex(key, expiration, json.dumps(value))
 
 
-@app.on_event("startup")
-def startup_event():
-    create_table()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await database.connect()
+    logger.info("Database connected")
+    yield
+    await database.disconnect()
+    logger.info("Database disconnected")
+
+app.router.lifespan_context = lifespan
+
+
+async def get_db() -> Database:
+    return database
 
 
 @app.get("/")
-def get_server():
-    return {"server_id": getenv("SERVER_ID", "1")}
+async def get_server():
+    server_id = os.getenv("SERVER_ID", "1")
+    logger.info(f"Server ID: {server_id}")
+    return {"server_id": server_id}
 
 
 @app.post("/add")
-def add_molecule(id: int, smiles: str):
-    connection = get_connection()
-    sql_code = """
-    INSERT INTO molecules (identifier, smiles)
-    VALUES (?, ?)
-    """
-    try:
-        c = connection.cursor()
-        c.execute(sql_code, (id, smiles))
-        connection.commit()
-        return {"message": f"Molecule '{id}' added successfully."}
-    except Error as e:
-        print(f"Error occurred: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if connection:
-            connection.close()
+async def add_molecule(molecule: Molecule, db: Database = Depends(get_db)):
+    query = molecules.insert().values(identifier=molecule.id, smiles=molecule.smiles)
+    await db.execute(query)
+    logger.info(f"Molecule '{molecule.id}' added successfully.")
+    return {"message": f"Molecule '{molecule.id}' added successfully."}
 
 
 @app.get("/get")
-def get_molecule(id: int):
-    connection = get_connection()
-    sql_code = """
-    SELECT smiles FROM molecules WHERE identifier = ?
-    """
-    try:
-        c = connection.cursor()
-        c.execute(sql_code, (id,))
-        row = c.fetchone()
-        if row:
-            return row[0]
-        else:
-            raise HTTPException(status_code=404, detail="Molecule not found")
-    except Error as e:
-        print(f"Error occurred: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if connection:
-            connection.close()
+async def get_molecule(id: int, db: Database = Depends(get_db)):
+    query = select(molecules.c.smiles).where(molecules.c.identifier == id)
+    result = await db.fetch_one(query)
+    if result:
+        logger.info(f"Molecule '{id}' found.")
+        return result["smiles"]
+    else:
+        logger.warning(f"Molecule '{id}' not found.")
+        raise HTTPException(status_code=404, detail="Molecule not found")
 
 
 @app.put("/update")
-def update_molecule(id: int, smiles: str):
-    connection = get_connection()
-    sql_code = """
-    UPDATE molecules SET smiles = ? WHERE identifier = ?
-    """
-    try:
-        c = connection.cursor()
-        c.execute(sql_code, (smiles, id))
-        connection.commit()
-        return {"message": f"Molecule '{id}' updated successfully."}
-    except Error as e:
-        print(f"Error occurred: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if connection:
-            connection.close()
+async def update_molecule(molecule: Molecule, db: Database = Depends(get_db)):
+    query = molecules.update().where(molecules.c.identifier == molecule.id).values(smiles=molecule.smiles)
+    await db.execute(query)
+    logger.info(f"Molecule '{molecule.id}' updated successfully.")
+    return {"message": f"Molecule '{molecule.id}' updated successfully."}
 
 
 @app.delete("/del")
-def delete_molecule(id: int):
-    connection = get_connection()
-    sql_code = """
-    DELETE FROM molecules WHERE identifier = ?
-    """
-    try:
-        c = connection.cursor()
-        c.execute(sql_code, (id,))
-        connection.commit()
-        return {"message": f"Molecule '{id}' deleted successfully."}
-    except Error as e:
-        print(f"Error occurred: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if connection:
-            connection.close()
+async def delete_molecule(id: int, db: Database = Depends(get_db)):
+    query = molecules.delete().where(molecules.c.identifier == id)
+    await db.execute(query)
+    logger.info(f"Molecule '{id}' deleted successfully.")
+    return {"message": f"Molecule '{id}' deleted successfully."}
 
 
 @app.get("/getall")
-def list_all_molecules():
-    connection = get_connection()
-    sql_code = """
-    SELECT identifier, smiles FROM molecules
-    """
+async def list_all_molecules(limit: int = 100, db: Database = Depends(get_db)):
     try:
-        c = connection.cursor()
-        c.execute(sql_code)
-        rows = c.fetchall()
-        return rows
-    except Error as e:
-        print(f"Error occurred: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if connection:
-            connection.close()
+        query = select(molecules)
+        rows = await db.fetch_all(query)
+        logger.info(f"Fetched {len(rows)} molecules from the database.")
+
+        count = 0
+        results = []
+        for row in rows:
+            if count >= limit:
+                break
+            results.append(row)
+            count += 1
+            logger.info(f"Yielding molecule {count} with ID: {row['identifier']}")
+
+        return results
+    except Exception as e:
+        logger.error(f"An error occurred: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 @app.get("/subsearch")
-def sub_search(substructure: str):
-    connection = get_connection()
-    sql_code = """
-    SELECT smiles FROM molecules
-    """
+async def sub_search(substructure: str, db: Database = Depends(get_db)):
+    cache_key = f"subsearch:{substructure}"
     try:
-        c = connection.cursor()
-        c.execute(sql_code)
-        rows = c.fetchall()
-        molecules = [row[0] for row in rows]
-        matches = substructure_search(molecules, substructure)
-        return matches
-    except Error as e:
-        print(f"Error occurred: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if connection:
-            connection.close()
+        cached_result = get_cached_result(cache_key)
+
+        if cached_result is not None:
+            logger.info(f"Returning cached result for substructure: {substructure}")
+            return {"source": "cache", "data": cached_result}
+
+        query = select(molecules.c.smiles)
+        rows = await db.fetch_all(query)
+        molecules_list = [row["smiles"] for row in rows]
+        task = substructure_search_task.apply_async(args=[substructure, molecules_list])
+
+        logger.info(f"Substructure search task initiated with task ID: {task.id}")
+        return {"task_id": task.id, "status": "PENDING"}
+
+    except Exception as e:
+        logger.error(f"An error occurred during substructure search: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+@app.get("/subsearch/{task_id}")
+async def get_task_result(task_id: str):
+    task_result = AsyncResult(task_id, app=celery)
+    if task_result.state == 'PENDING':
+        return {"task_id": task_id, "status": "Task is still processing"}
+    elif task_result.state == 'SUCCESS':
+        return {"task_id": task_id, "status": "Task completed", "result": task_result.result}
+    else:
+        return {"task_id": task_id, "status": task_result.state}
