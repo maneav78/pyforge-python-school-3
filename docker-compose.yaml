@@ -83,9 +83,12 @@ services:
       - redis
       - postgres
       - web1
-      - web2 #try without this 
+      - web2 
     volumes:
       - .:/src
+
+ 
+
 
 volumes:
   pgdata:

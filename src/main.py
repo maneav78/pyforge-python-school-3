@@ -84,9 +84,9 @@ async def delete_molecule(id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/getall", response_model=List[MoleculeSchema])
-def list_all_molecules(limit: int = 100, db: Session = Depends(get_db)):
+def list_all_molecules(limit: int = 100, offset: int = 0, db: Session = Depends(get_db)):
     try:
-        molecules = db.query(MoleculeModel).limit(limit).all()
+        molecules = db.query(MoleculeModel).offset(offset).limit(limit).all()
         logger.info(f"Fetched {len(molecules)} molecules from the database.")
         return molecules
     except SQLAlchemyError as e:
