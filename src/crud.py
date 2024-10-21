@@ -1,5 +1,7 @@
 from sqlalchemy.orm import Session
-import models, schemas
+import models
+import schemas
+
 
 class MoleculeDAO:
     def __init__(self, db: Session):

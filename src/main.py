@@ -5,7 +5,7 @@ from celery.result import AsyncResult
 from celery_worker import celery
 from tasks import substructure_search_task
 from utils import logger
-from schemas import MoleculeCreate, MoleculeUpdate, MoleculeSchema 
+from schemas import MoleculeCreate, MoleculeUpdate, MoleculeSchema
 from models import Molecule as MoleculeModel
 from crud import MoleculeDAO
 from typing import List
@@ -29,12 +29,13 @@ def is_valid_smiles(smiles: str) -> bool:
     mol = Chem.MolFromSmiles(smiles)
     return mol is not None
 
+
 @app.post("/add", response_model=MoleculeSchema)
 async def add_molecule(molecule: MoleculeCreate, db: Session = Depends(get_db)):
     if not is_valid_smiles(molecule.smiles):
         logger.warning(f"Invalid SMILES string: {molecule.smiles}")
         raise HTTPException(status_code=400, detail="Invalid SMILES string")
-    
+
     molecule_dao = MoleculeDAO(db)
     db_molecule = molecule_dao.create_molecule(molecule)
     logger.info(f"Molecule '{db_molecule.id}' added successfully.")
@@ -64,7 +65,7 @@ async def update_molecule(id: int, molecule: MoleculeUpdate, db: Session = Depen
     if molecule.smiles and not is_valid_smiles(molecule.smiles):
         logger.warning(f"Invalid SMILES string: {molecule.smiles}")
         raise HTTPException(status_code=400, detail="Invalid SMILES string")
-       
+
     db_molecule = molecule_dao.update_molecule(db_molecule, molecule)
     logger.info(f"Molecule '{id}' updated successfully.")
     return db_molecule
@@ -106,7 +107,7 @@ async def sub_search(substructure: str, db: Session = Depends(get_db)):
 
         molecules = db.query(MoleculeModel.smiles).all()
         molecules_list = [m.smiles for m in molecules]
-        task = substructure_search_task.apply_async(args=[substructure, molecules_list])    
+        task = substructure_search_task.apply_async(args=[substructure, molecules_list])
 
         logger.info(f"Substructure search task initiated with task ID: {task.id}")
         return {"task_id": task.id, "status": "PENDING"}
