@@ -4,12 +4,7 @@ on:
   push:
     branches:
       - 'main'
-      - 'postgres-branch'
-      - 'test-branch'
-      - 'logging'
-      - 'celery-branch'
-      - 'redis-branch'
-      - 'eks-branch'
+      - 'fix-branch'
 
 jobs:
   testing:
