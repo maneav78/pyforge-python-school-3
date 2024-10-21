@@ -8,3 +8,5 @@ src/molecules.db
 .env
 docker.sh
 .pytest_cache
+/dags
+/logs
