@@ -108,7 +108,7 @@ jobs:
       - name: View application logs
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} \
-          "docker compose logs"
+          "cd app && docker compose logs"
             
       - name: Clean up
         run: |
