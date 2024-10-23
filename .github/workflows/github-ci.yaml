@@ -101,14 +101,6 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22  
           script: |
-            echo 'Acquire::ForceIPv4 "true";' | sudo tee /etc/apt/apt.conf.d/99force-ipv4
-
-            sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
-            sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
-            sudo sysctl -w net.ipv6.conf.lo.disable_ipv6=1
-
-            echo 'precedence ::ffff:0:0/96  100' | sudo tee -a /etc/gai.conf
-
             cd /home/${{ secrets.SSH_USERNAME }}/app
             chmod +x deploy.sh
             ./deploy.sh
