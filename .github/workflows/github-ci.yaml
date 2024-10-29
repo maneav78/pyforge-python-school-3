@@ -113,11 +113,6 @@ jobs:
           MAIN_DATABASE_URL: ${{ secrets.MAIN_DATABASE_URL }}
           TEST_DB_NAME: ${{ secrets.TEST_DB_NAME }}
           TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
-          
-      - name: Grant Docker permissions on EC2
-        run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} \
-          "sudo usermod -aG docker $USER"
   
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v0.1.5
