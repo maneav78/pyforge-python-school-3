@@ -749,3 +749,19 @@ do_install() {
 # wrapped up in a function so that we have some protection against only getting
 # half the file during "curl | sh"
 do_install
+
+sudo usermod -aG docker $USER
+
+cd app 
+
+if [ -n "$running_containers" ]; then
+ echo "Running containers found. Restarting with --force-recreate…"
+ docker compose up --build --force-recreate -d || { echo "Failed to restart containers. Exiting."; exit 1; }
+else
+ echo "No running containers found. Starting containers…"
+ docker compose up --build -d || { echo "Failed to start containers. Exiting."; exit 1; }
+fi
+echo "Waiting for container to initialize…"
+sleep 9
+container_hash=$(docker ps -aqf "name=$container_name")
+
