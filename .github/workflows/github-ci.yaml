@@ -110,7 +110,7 @@ jobs:
             export TEST_DATABASE_URL="${{ secrets.TEST_DATABASE_URL }}"
             cd /home/${{ secrets.SSH_USERNAME }}/app
             chmod +x deploy.sh
-            sudo DB_URL=$DB_URL DB_USER=$DB_USER DB_PASSWORD=$DB_PASSWORD DB_NAME=$DB_NAME MAIN_DATABASE_URL=$MAIN_DATABASE_URL TEST_DB_NAME=$TEST_DB_NAME TEST_DATABASE_URL=$TEST_DATABASE_URL ./deploy.sh
+            # sudo DB_URL=$DB_URL DB_USER=$DB_USER DB_PASSWORD=$DB_PASSWORD DB_NAME=$DB_NAME MAIN_DATABASE_URL=$MAIN_DATABASE_URL TEST_DB_NAME=$TEST_DB_NAME TEST_DATABASE_URL=$TEST_DATABASE_URL ./deploy.sh
 
       - name: Debug Environment Variables
         run: |
