@@ -762,7 +762,7 @@ echo "DB_NAME='${DB_NAME}'" | sudo tee -a /etc/environment
 echo "MAIN_DATABASE_URL='${MAIN_DATABASE_URL}'" | sudo tee -a /etc/environment
 echo "TEST_DB_NAME='${TEST_DB_NAME}'" | sudo tee -a /etc/environment
 echo "TEST_DATABASE_URL='${TEST_DATABASE_URL}'" | sudo tee -a /etc/environment
-
+source /etc/environment
 
 if [ -n "$running_containers" ]; then
  echo "Running containers found. Restarting with --force-recreate…"
