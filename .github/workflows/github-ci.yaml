@@ -93,6 +93,27 @@ jobs:
         run: |
           scp -o StrictHostKeyChecking=no -r * ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:/home/${{ secrets.SSH_USERNAME }}/app
 
+      - name: Set environment variables on EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} << 'EOF'
+            echo "DB_URL=${DB_URL}" | sudo tee -a /etc/environment
+            echo "DB_USER=${DB_USER}" | sudo tee -a /etc/environment
+            echo "DB_PASSWORD=${DB_PASSWORD}" | sudo tee -a /etc/environment
+            echo "DB_NAME=${DB_NAME}" | sudo tee -a /etc/environment
+            echo "MAIN_DATABASE_URL=${MAIN_DATABASE_URL}" | sudo tee -a /etc/environment
+            echo "TEST_DB_NAME=${TEST_DB_NAME}" | sudo tee -a /etc/environment
+            echo "TEST_DATABASE_URL=${TEST_DATABASE_URL}" | sudo tee -a /etc/environment
+            source /etc/environment
+          EOF
+        env:
+          DB_URL: ${{ secrets.DB_URL }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          MAIN_DATABASE_URL: ${{ secrets.MAIN_DATABASE_URL }}
+          TEST_DB_NAME: ${{ secrets.TEST_DB_NAME }}
+          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+          
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v0.1.5
         with:
