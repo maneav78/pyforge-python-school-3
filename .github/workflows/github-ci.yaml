@@ -112,7 +112,21 @@ jobs:
             chmod +x deploy.sh
             sudo DB_URL=$DB_URL DB_USER=$DB_USER DB_PASSWORD=$DB_PASSWORD DB_NAME=$DB_NAME MAIN_DATABASE_URL=$MAIN_DATABASE_URL TEST_DB_NAME=$TEST_DB_NAME TEST_DATABASE_URL=$TEST_DATABASE_URL ./deploy.sh
 
-
+      - name: Debug Environment Variables
+        run: |
+          echo "DB_URL: $DB_URL"
+          echo "DB_USER: $DB_USER"
+          echo "DB_NAME: $DB_NAME"
+          # Uncomment the following line if you're sure it's safe to check
+          # echo "DB_PASSWORD: $DB_PASSWORD"
+        env:
+          DB_URL: ${{ secrets.DB_URL }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          MAIN_DATABASE_URL: ${{ secrets.MAIN_DATABASE_URL }}
+          TEST_DB_NAME: ${{ secrets.TEST_DB_NAME }}
+          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
 
       - name: View application logs
         run: |
