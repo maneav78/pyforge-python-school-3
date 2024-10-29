@@ -33,9 +33,9 @@ echo "MAIN_DATABASE_URL='${MAIN_DATABASE_URL}'" | sudo tee -a /etc/environment
 echo "TEST_DB_NAME='${TEST_DB_NAME}'" | sudo tee -a /etc/environment
 echo "TEST_DATABASE_URL='${TEST_DATABASE_URL}'" | sudo tee -a /etc/environment
 
-. /etc/environment
+source /etc/environment
 
-if [ ! -f docker-compose.yaml ]; then
+if [ ! -f docker-compose.yml ]; then
     echo "docker-compose.yml not found in the current directory. Exiting."
     exit 1
 fi
@@ -56,4 +56,3 @@ sleep 10
 
 /usr/bin/docker ps
 echo "Deployment script completed."
-
